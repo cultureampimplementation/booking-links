@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <? if (typeof customerEmails === 'undefined') { var customerEmails = []; } ?>
+  <base target="_top">
+  <meta charset="utf-8">
+  <title>Pick meeting times</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 20px; }
+    h1 { margin: 0 0 12px; }
+
+    /* top controls */
+    .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; position: sticky; top: 0; background: var(--bg, #fff); padding-bottom: 8px; z-index: 2; }
+    select { padding: 8px; font-size: 14px; }
+    .tabs { display: inline-flex; gap: 6px; border: 1px solid #e0e0e0; border-radius: 999px; padding: 2px; }
+    .tab { padding: 6px 10px; border-radius: 999px; cursor: pointer; }
+    .tab.active { background: #f0f4ff; font-weight: 600; }
+    .nav-btn[disabled] { opacity:.5; cursor:default; }
+
+    .cart { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+    .badge { padding: 4px 8px; border: 1px solid #ddd; border-radius: 999px; font-size: 12px; cursor: pointer; }
+    .btn { padding: 8px 12px; border: 1px solid #ccc; border-radius: 8px; background: #f7f7f7; cursor: pointer; }
+    .btn:disabled { opacity: .5; cursor: default; }
+    .success { background: #d8f5d1; border-color: #b4e3a8; }
+    .error { background: #ffe2e2; border-color: #ffc7c7; }
+
+    .notice { margin-top: 4px; color: #666; font-size: 13px; }
+    .breadcrumb { margin-top: 6px; color: #666; font-size: 14px; }
+    .breadcrumb a { color: inherit; text-decoration: underline; cursor: pointer; }
+
+    /* ===== Overview (Months with Week rows) ===== */
+    .ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; margin-top: 12px; }
+    .mcard { border: 1px solid #e0e0e0; border-radius: 12px; padding: 12px; background: #fff; }
+    .mcard:hover { box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+    .mhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .mname { font-weight: 800; font-size: 18px; }
+    .weeks { display: grid; gap: 10px; }
+    .week-row:hover { box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+    .week-label { font-size: 13px; font-weight: 600; color: #333; }
+
+    /* Clickable week pill */
+    .week-pill{
+      /* slightly darker default */
+      background:#ede9fe;           /* lavender */
+      color:#0f172a;
+      border:1px solid rgba(15,23,42,.10);
+      border-radius:10px;
+      padding:10px 12px;
+      font-weight:800; font-size:14px; line-height:1.1;
+      cursor:pointer; user-select:none; text-align:left;
+      box-shadow:inset 0 -1px 0 rgba(255,255,255,.6);
+    }
+    .week-pill:hover    { filter: brightness(1.02); }
+    .week-pill:active   { transform: translateY(1px); }
+
+    /* Force contrasting text when bg is dark */
+    .week-pill.lightText{ color:#fff; }
+
+    /* Zero availability: white with a hairline outline */
+    .week-pill.zero{
+      background:#fff; color:#0f172a;
+      border-color:#e5e7eb; box-shadow:none; cursor:default;
+    }
+    .week-pill.zero:hover { filter: none; }
+
+    .week-pill.disabled {
+      background: #eef2f7;
+      color: #6b7280;
+      cursor: default;
+      box-shadow: none;
+    }
+
+    /* ===== Week view ===== */
+    .week-wrap { border: 1px solid #e0e0e0; border-radius: 12px; padding: 14px; margin-top: 12px; background: #fff; }
+    .week-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .week-title { font-weight: 900; font-size: 22px; }
+    .nav-btn { padding: 6px 10px; border: 1px solid #ddd; border-radius: 8px; background: #fff; cursor: pointer; }
+
+    .grid { border: 1px solid #eee; border-radius: 12px; overflow: hidden; margin-top: 10px; }
+    .grid-header { display: grid; grid-template-columns: repeat(7, 1fr); }
+    .grid-header div { text-align: center; font-size: 12px; padding: 6px 0; background: #fafafa; border-bottom: 1px solid #eee; font-weight: 700; }
+
+    .days { display: grid; grid-template-columns: repeat(7, 1fr); }
+    .day { border-right: 1px solid #f2f2f2; border-bottom: 1px solid #f2f2f2; position: relative; padding: 6px; min-height: 120px; }
+    .day:nth-child(7n) { border-right: none; }
+    .day-header { display:flex; justify-content: space-between; align-items:center; margin-bottom: 8px; }
+    .day.today .date { color:#0b5bd3; }
+    .date { font-size: 12px; font-weight: 700; color: #333; }
+    .past .date { color: #a0a0a0; }
+
+    .heat { position:absolute; inset:0; z-index:0; border-radius:0; }
+
+    .day-body { display: grid; grid-template-columns: 1fr; gap: 8px; position: relative; z-index: 1; }
+    .pill { border: 1px solid #c7d6e6; background:#f7fbff; border-radius: 10px; padding: 8px 10px; min-height: 30px; display:flex; align-items:center; gap:8px; font-weight:600; font-size: 13px; justify-content: center; }
+    .pill .icon { width: 1.1em; text-align:center; opacity:.55; }
+    .pill .label { font-variant-numeric: tabular-nums; }
+    .pill.selected { background:#0f3b59; color:#fff; border-color:#0f3b59; }
+    .pill.selected .icon { opacity:1; }
+
+    .banner { padding: 10px; margin-top: 10px; border: 1px dashed #d0d7e3; border-radius: 10px; text-align: center; color: #445; background: #f7f9ff; }
+
+    /* utility */
+    .hide { display: none !important; }
+
+    /* modals */
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; align-items: center; justify-content: center; z-index: 50; }
+    .modal { background: #fff; border-radius: 12px; width: min(520px, 92vw); max-height: 80vh; overflow:auto; box-shadow: 0 10px 30px rgba(0,0,0,.2); }
+    .modal header { padding: 12px 16px; border-bottom: 1px solid #eee; display:flex; align-items:center; justify-content:space-between; }
+    .modal h3 { margin:0; font-size: 16px; }
+    .modal .content { padding: 12px 16px; }
+    .sel-list { display: grid; gap: 8px; }
+    .sel-item { display:flex; align-items:center; justify-content:space-between; border:1px solid #eee; border-radius:8px; padding:8px 10px; background:#fafafa; }
+    .sel-item .when { font-variant-numeric: tabular-nums; }
+    .modal footer { padding: 12px 16px; border-top: 1px solid #eee; display:flex; justify-content:flex-end; gap: 8px; }
+    .link-btn { background:none; border:none; color:#2a62d6; cursor:pointer; padding:6px 8px; }
+
+    /* loading modal */
+    .loading { display:flex; flex-direction:column; align-items:center; gap:10px; padding: 20px; }
+    .loading p { margin:0; color:#333; }
+    .spinner { width:36px; height:36px; border:3px solid #cfd8ff; border-top-color:#2a62d6; border-radius:50%; animation:spin .9s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .heat { border-radius: 10px; padding: 10px 12px; border: 1px solid #e5e7eb; margin: 6px 0; }
+    .heat-0 { background: #f3f4f6; }           /* 0 / empty */
+    .heat-1 { background: #e8f1ff; }
+    .heat-2 { background: #d6eaff; }
+    .heat-3 { background: #c3e3ff; }
+    .heat-4 { background: #b1dcff; }
+    .heat-5 { background: #9cd3ff; }           /* most */
+
+    /* Confirm question styling */
+    #confirmQuestionWrap { font-size: 13px; color: #666; }
+    #confirmQuestionWrap .cq-title { font-weight: 700; margin: 8px 0 6px; }
+    #confirmQuestionWrap .cq-row { display:flex; align-items:center; gap:8px; margin:4px 0; }
+    #confirmQuestionWrap label { cursor: pointer; }
+
+
+  </style>
+</head>
+<body>
+  <h1>Pick meeting times</h1>
+
+  <div class="controls">
+    <div class="tabs">
+      <div class="tab active" id="tabOverview">Overview</div>
+      <div class="tab" id="tabWeek">Week</div>
+    </div>
+
+    <label for="tz">Timezone:</label>
+    <select id="tz"></select>
+
+    <div class="cart">
+      <span class="badge" id="cartCount" title="View your selections">0 selected</span>
+      <button class="btn" id="submitBtn" disabled>Book it in!</button>
+    </div>
+  </div>
+
+  <div class="notice" id="notice">
+    Pick up to three options. We’ll place temporary holds in 
+    <span id="colleagueName"></span>’s calendar.
+  </div>
+
+  <div class="breadcrumb" id="crumb"></div>
+
+  <!-- OVERVIEW -->
+  <div id="overviewView">
+    <div class="ov-grid" id="ovGrid"></div>
+  </div>
+
+  <!-- WEEK -->
+  <div id="weekView" class="hide">
+    <div class="week-wrap">
+      <div class="week-head">
+        <button class="nav-btn" id="prevWeek">←</button>
+        <div class="week-title" id="weekTitle"></div>
+        <button class="nav-btn" id="nextWeek">→</button>
+      </div>
+
+      <div class="grid">
+        <div class="grid-header">
+          <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+        </div>
+        <div class="days" id="weekDays"></div>
+      </div>
+
+      <div class="banner hide" id="emptyWeekBanner">No availability this week.</div>
+      <div class="notice" id="weekMeta"></div>
+    </div>
+  </div>
+
+  <!-- CART MODAL -->
+  <div class="modal-backdrop" id="cartModal">
+    <div class="modal">
+      <header>
+        <h3>Your selections</h3>
+        <button class="link-btn" id="closeCart">Close</button>
+      </header>
+      <div class="content">
+        <div class="sel-list" id="selList"></div>
+        <div id="emptyCartNote" class="notice hide">No selections yet.</div>
+      </div>
+      <footer>
+        <button class="link-btn" id="clearAll">Clear all</button>
+        <button class="btn" id="modalSubmit">Submit selection</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- CONFIRM MODAL (single-select flow) -->
+  <div class="modal-backdrop" id="confirmModal">
+    <div class="modal">
+      <header>
+        <h3>Confirm time</h3>
+        <button class="link-btn" id="closeConfirm">Close</button>
+      </header>
+      <div class="content">
+        <p id="confirmWhen" class="notice"></p>
+        <div id="inviteList"></div>
+        <button class="link-btn" id="addInviteBtn">+ Add another</button>
+        <input type="email" id="newInviteInput" class="hide" placeholder="Enter email" />
+        <div id="confirmQuestionWrap" class="hide" style="margin-top:12px;"></div>
+      </div>
+      <footer>
+        <button class="btn" id="confirmBtn">Confirm</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- LOADING MODAL -->
+  <div class="modal-backdrop" id="loadingModal" style="display:flex;">
+    <div class="modal">
+      <div class="loading">
+        <div class="spinner" aria-hidden="true"></div>
+        <p aria-live="polite" id="loadingMsg">Fetching availability…</p>
+      </div>
+    </div>
+  </div>
+
+<script>
+  /**********************
+   * CONFIG
+   **********************/
+  // TODO: replace with your deployed Apps Script Web App URL (ends with /exec)
+  const API_BASE = 'https://script.google.com/macros/s/AKfycbwqqw_6MRAR9zkkDg6-vUNNETC1UQpS0sdIF6iSh-zT29FbKOcZkkkN-x3aqkvdyI7f8A/exec';
+
+  // Token comes from URL: https://.../index.html?token=abc123
+  const token = new URLSearchParams(location.search).get('token') || '';
+
+  /**********************
+   * Small helpers
+   **********************/
+  function debounce(fn, wait) {
+    let t;
+    return function (...args) {
+      clearTimeout(t);
+      t = setTimeout(() => fn.apply(this, args), wait);
+    };
+  }
+
+  async function apiGet(action, params) {
+    const qs = new URLSearchParams({ action, ...(params || {}) });
+    const res = await fetch(`${API_BASE}?${qs.toString()}`, { credentials: 'omit' });
+    if (!res.ok) throw new Error(`GET ${action} failed: ${res.status}`);
+    return res.json();
+  }
+  async function apiPost(action, params, body) {
+    const qs = new URLSearchParams({ action, ...(params || {}) });
+    const res = await fetch(`${API_BASE}?${qs.toString()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {}),
+      credentials: 'omit'
+    });
+    if (!res.ok) throw new Error(`POST ${action} failed: ${res.status}`);
+    return res.json();
+  }
+
+  /**********************
+   * Debounced server writes
+   **********************/
+  const saveSuggestedInviteesDebounced = debounce((emails) => {
+    apiPost('saveSuggestedInvitees', { token }, { emails }).catch(console.error);
+  }, 400);
+
+  const saveCustomerEmailsDebounced = debounce((emails) => {
+    apiPost('saveCustomerEmails', { token }, { emails }).catch(console.error);
+  }, 400);
+
+  const saveConfirmAnswerDebounced = debounce((key, value) => {
+    if (!key) return;
+    apiPost('saveConfirmAnswer', { token }, { key, value }).catch(console.error);
+  }, 400);
+
+  /**********************
+   * State & DOM refs
+   **********************/
+  let initialTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  let timezones = ['UTC', 'Europe/Berlin', 'Europe/London', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Australia/Sydney'];
+  let MAX_SELECT = 1;
+
+  const state = {
+    tz: initialTz,
+    dayCounts: new Map(),
+    weekTotals: new Map(),
+    monthWeeks: new Map(),
+    currentWeek: null,
+    weekCache: new Map(),
+    cart: [],
+    suggestedInvitees: [],
+    preselectedCustomerEmails: [],
+    confirmQuestion: null
+  };
+
+  let pendingWeekKey = null;
+
+  const tzSel = document.getElementById('tz');
+  const crumb = document.getElementById('crumb');
+  const submitBtn = document.getElementById('submitBtn');
+  const cartCount = document.getElementById('cartCount');
+  const tabOverview = document.getElementById('tabOverview');
+  const tabWeek = document.getElementById('tabWeek');
+  const overviewView = document.getElementById('overviewView');
+  const ovGrid = document.getElementById('ovGrid');
+  const weekView = document.getElementById('weekView');
+  const weekTitleEl = document.getElementById('weekTitle');
+  const weekDaysEl = document.getElementById('weekDays');
+  const prevWeekBtn = document.getElementById('prevWeek');
+  const nextWeekBtn = document.getElementById('nextWeek');
+  const weekMetaEl = document.getElementById('weekMeta');
+  const emptyWeekBanner = document.getElementById('emptyWeekBanner');
+  const cartModal = document.getElementById('cartModal');
+  const selList = document.getElementById('selList');
+  const emptyCartNote = document.getElementById('emptyCartNote');
+  const closeCart = document.getElementById('closeCart');
+  const clearAll = document.getElementById('clearAll');
+  const modalSubmit = document.getElementById('modalSubmit');
+  const loadingModal = document.getElementById('loadingModal');
+  const loadingMsg = document.getElementById('loadingMsg');
+  const confirmModal = document.getElementById('confirmModal');
+  const confirmWhen = document.getElementById('confirmWhen');
+  const confirmBtn = document.getElementById('confirmBtn');
+  const closeConfirm = document.getElementById('closeConfirm');
+  const colleagueNameEl = document.getElementById('colleagueName');
+
+  let pendingIso = null;
+  let pendingPill = null;
+
+  /**********************
+   * Utilities (unchanged)
+   **********************/
+  function fmtParts(date, tz) { return new Intl.DateTimeFormat('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date); }
+  function ymdKey(date, tz) { const p = fmtParts(date, tz); return `${p.find(x => x.type === 'year').value}-${p.find(x => x.type === 'month').value}-${p.find(x => x.type === 'day').value}`; }
+  function monthTitle(y, m) { return new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en-GB', { month: 'long', year: 'numeric' }); }
+  function mondayKey(key) { const d = new Date(key + 'T00:00:00Z'); const js = d.getUTCDay(); const delta = js === 0 ? -6 : 1 - js; d.setUTCDate(d.getUTCDate() + delta); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`; }
+  function plusDaysKey(key, n) { const d = new Date(key + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`; }
+  function tzTimeHM(date, tz) { const s = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(date); return s.replace(':', 'h'); }
+  function todayKey(tz) { return ymdKey(new Date(), tz); }
+  function isoWeekNumberFromKey(dayKey) { const d = new Date(dayKey + 'T00:00:00Z'); const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - day); const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1)); return Math.ceil((((d - yearStart) / 86400000) + 1) / 7); }
+  function weekDaysFromMondayKey(monKey) { return Array.from({ length: 7 }, (_, i) => plusDaysKey(monKey, i)); }
+  function parseSlots(raw) { return (raw || []).map(s => ({ start: new Date(s.start), end: new Date(s.end) })).filter(s => !isNaN(s.start) && !isNaN(s.end)); }
+  function makeQuantileBuckets(counts) { const arr = counts.filter(n => Number.isFinite(n)).slice().sort((a, b) => a - b); if (!arr.length) return [0, 0, 0, 0, 0]; const q = p => arr[Math.min(arr.length - 1, Math.floor(p * (arr.length - 1)))]; return [q(0.2), q(0.4), q(0.6), q(0.8), arr[arr.length - 1]]; }
+  function heatLevel(count, breaks) { if (count <= 0) return 0; const [q1, q2, q3, q4, _max] = breaks; if (count <= q1) return 1; if (count <= q2) return 2; if (count <= q3) return 3; if (count <= q4) return 4; return 5; }
+  function weekLabel(monKey) { const d = new Date(monKey + 'T00:00:00Z'); const mon = d.toLocaleString('en-GB', { month: 'short' }); return `Week of ${mon} ${d.getUTCDate()}${ordinal(d.getUTCDate())} — Wk ${isoWeekNumberFromKey(monKey)}`; }
+  function weekColorForValue(value, max) { if (!value || !max) return null; const gamma = 0.75; let t = Math.max(0, Math.min(1, value / max)); t = Math.pow(t, gamma); const palette = ['#faf5ff', '#f3e8ff', '#e9d5ff', '#d8b4fe', '#c084fc', '#a855f7', '#9333ea', '#7e22ce', '#6b21a8']; const idx = Math.min(palette.length - 1, Math.round(t * (palette.length - 1))); return palette[idx]; }
+  function needsLightText(hex) { if (!hex) return false; const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex); if (!m) return false; const r = parseInt(m[1], 16) / 255, g = parseInt(m[2], 16) / 255, b = parseInt(m[3], 16) / 255; const c = [r, g, b].map(x => x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4)); const L = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; return L < 0.58; }
+  function ordinal(n) { const mod10 = n % 10, mod100 = n % 100; if (mod100 >= 11 && mod100 <= 13) return 'th'; switch (mod10) { case 1: return 'st'; case 2: return 'nd'; case 3: return 'rd'; default: return 'th'; } }
+  function formatWeekLabel(startISO) { const d = new Date(startISO); const month = d.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' }); const day = d.getUTCDate(); return `Week of ${month} ${day}${ordinal(day)}`; }
+  function isoWeekMonday(y, w) { const jan4 = new Date(Date.UTC(y, 0, 4)); const day = jan4.getUTCDay() || 7; const monW1 = new Date(jan4); monW1.setUTCDate(jan4.getUTCDate() - day + 1); const d = new Date(monW1); d.setUTCDate(monW1.getUTCDate() + (w - 1) * 7); return d; }
+
+  function groupWeeksFromObject(weeksObj) {
+    const weekTotals = new Map();
+    const monthWeeks = new Map();
+    for (const [rawKey, rawCnt] of Object.entries(weeksObj || {})) {
+      const m = String(rawKey).trim().match(/^(\d{4})-W(\d{1,2})$/);
+      if (!m) continue;
+      const y = +m[1], w = +m[2];
+      const wkKey = `${y}-W${String(w).padStart(2, '0')}`;
+      const count = Number(rawCnt) || 0;
+      weekTotals.set(wkKey, count);
+      const mon = isoWeekMonday(y, w);
+      if (isNaN(+mon)) continue;
+      const startISO = mon.toISOString();
+      const monthKey = startISO.slice(0, 7);
+      if (!monthWeeks.has(monthKey)) monthWeeks.set(monthKey, []);
+      monthWeeks.get(monthKey).push({ week: wkKey, weekNum: w, startISO, count });
+    }
+    for (const arr of monthWeeks.values()) arr.sort((a, b) => a.startISO.localeCompare(b.startISO));
+    return { weekTotals, monthWeeks };
+  }
+
+  /**********************
+   * View toggles + loading UI
+   **********************/
+  function setTabs(active) {
+    [tabOverview, tabWeek].forEach(t => t.classList.remove('active'));
+    ({ overview: tabOverview, week: tabWeek }[active]).classList.add('active');
+  }
+  function showOnly(view) {
+    overviewView.classList.toggle('hide', view !== 'overview');
+    weekView.classList.toggle('hide', view !== 'week');
+    setTabs(view);
+  }
+  function setBreadcrumbForOverview() { crumb.textContent = 'View: Overview'; }
+  function setBreadcrumbForWeek(monKey) {
+    const d = new Date(monKey + 'T00:00:00Z');
+    const label = `${d.toLocaleString('en-GB', { month: 'long', year: 'numeric' })} • Week ${isoWeekNumberFromKey(monKey)}`;
+    crumb.innerHTML = `View: <a onclick="renderOverview()">Overview</a> / ${label}`;
+  }
+  function showLoading(msg) { if (msg) loadingMsg.textContent = msg; loadingModal.style.display = 'flex'; }
+  function hideLoading() { loadingModal.style.display = 'none'; loadingMsg.textContent = 'Fetching availability…'; }
+
+  /**********************
+   * Overview rendering
+   **********************/
+  function renderOverview() {
+    showOnly('overview');
+    setBreadcrumbForOverview();
+
+    ovGrid.innerHTML = '';
+    if (!state?.monthWeeks || state.monthWeeks.size === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'notice';
+      empty.textContent = 'No availability in the current window.';
+      ovGrid.appendChild(empty);
+      return;
+    }
+    const months = [...state.monthWeeks.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    months.forEach(([ym, weeks]) => {
+      const [y, m] = ym.split('-').map(Number);
+      const card = document.createElement('div'); card.className = 'mcard';
+      const head = document.createElement('div'); head.className = 'mhead';
+      const name = document.createElement('div'); name.className = 'mname'; name.textContent = monthTitle(y, m);
+      head.appendChild(name); card.appendChild(head);
+
+      const list = document.createElement('div'); list.className = 'weeks';
+      const max = weeks.reduce((mx, w) => Math.max(mx, Number(w.count || 0)), 0);
+
+      weeks.forEach(w => {
+        const v = Number(w.count || 0);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'week-pill';
+        btn.textContent = `${formatWeekLabel(w.startISO)} — Wk ${w.weekNum} (${v} ${v === 1 ? 'slot' : 'slots'})`;
+        if (v === 0) {
+          btn.classList.add('zero'); btn.disabled = true;
+        } else {
+          const bg = weekColorForValue(v, max) || '#e8f1ff';
+          btn.style.background = bg; btn.style.borderColor = 'rgba(15,23,42,.10)';
+          if (needsLightText(bg)) btn.classList.add('lightText');
+          const monKey = w.startISO.slice(0, 10);
+          btn.addEventListener('click', () => openWeek(monKey));
+        }
+        list.appendChild(btn);
+      });
+
+      card.appendChild(list);
+      ovGrid.appendChild(card);
+    });
+
+    hideLoading();
+  }
+
+  /**********************
+   * Week data & rendering (fetch via API)
+   **********************/
+  function ensureWeekLoaded(mondayKey, { prefetch = false } = {}) {
+    if (state.weekCache.has(mondayKey)) return Promise.resolve(state.weekCache.get(mondayKey));
+    pendingWeekKey = mondayKey;
+    return apiGet('fetchWeek', { token, mondayKey })
+      .then(res => {
+        const parsed = parseSlots(res && res.slots ? res.slots : []);
+        const payload = { slotsParsed: parsed, exactCount: parsed.length };
+        state.weekCache.set(mondayKey, payload);
+        if (!prefetch && state.currentWeek === mondayKey && pendingWeekKey === mondayKey) {
+          renderWeek(payload);
+        }
+        return payload;
+      })
+      .catch(err => {
+        if (!prefetch) alert('Failed to load week.\n' + (err && err.message ? err.message : String(err)));
+        throw err;
+      })
+      .finally(() => { if (pendingWeekKey === mondayKey) pendingWeekKey = null; });
+  }
+
+  function openWeek(mondayKey) {
+    state.currentWeek = mondayKey;
+    showOnly('week');
+    setBreadcrumbForWeek(mondayKey);
+    setWeekHeader(mondayKey);
+
+    showLoading('Loading this week…');
+    ensureWeekLoaded(mondayKey).then(payload => {
+      if (state.currentWeek === mondayKey) {
+        renderWeek(payload);
+        prefetchNeighbors(mondayKey);
+      }
+    }).finally(hideLoading);
+  }
+
+  function setWeekHeader(mondayKey) {
+    const d = new Date(mondayKey + 'T00:00:00Z');
+    weekTitleEl.textContent = `${d.toLocaleString('en-GB', { month: 'long', year: 'numeric' })} • Week ${isoWeekNumberFromKey(mondayKey)}`;
+  }
+
+  function prefetchNeighbors(mondayKey) {
+    const next = plusDaysKey(mondayKey, 7);
+    const prev = plusDaysKey(mondayKey, -7);
+    ensureWeekLoaded(next, { prefetch: true }).finally(() => ensureWeekLoaded(prev, { prefetch: true }));
+  }
+
+  function renderWeek(payload) {
+    setWeekHeader(state.currentWeek);
+
+    const days = weekDaysFromMondayKey(state.currentWeek);
+    const today = todayKey(state.tz);
+    const byDay = new Map(days.map(k => [k, []]));
+    payload.slotsParsed.forEach(s => {
+      const key = ymdKey(s.start, state.tz);
+      if (byDay.has(key)) byDay.get(key).push(s);
+    });
+    days.forEach(k => byDay.get(k).sort((a, b) => a.start - b.start));
+
+    weekDaysEl.innerHTML = '';
+    days.forEach(dayKey => {
+      const inPast = dayKey < today;
+      const dNum = Number(dayKey.slice(-2));
+      const col = document.createElement('div');
+      col.className = 'day' + (inPast ? ' past' : '');
+      const header = document.createElement('div'); header.className = 'day-header';
+      const dateEl = document.createElement('div'); dateEl.className = 'date'; dateEl.textContent = dNum;
+      header.appendChild(dateEl); col.appendChild(header);
+
+      const body = document.createElement('div'); body.className = 'day-body';
+      const items = byDay.get(dayKey) || [];
+      items.forEach(slot => {
+        const iso = slot.start.toISOString();
+        const pill = document.createElement('button');
+        pill.type = 'button';
+        const selected = state.cart.includes(iso);
+        pill.className = 'pill' + (selected ? ' selected' : '');
+
+        const icon = document.createElement('span'); icon.className = 'icon'; icon.textContent = selected ? '✓' : '○';
+        const label = document.createElement('span'); label.className = 'label';
+        label.textContent = `${tzTimeHM(slot.start, state.tz)} – ${tzTimeHM(slot.end, state.tz)}`;
+        pill.append(icon, label);
+
+        pill.onclick = () => {
+          if (MAX_SELECT === 1) {
+            if (pendingPill && pendingPill !== pill) {
+              pendingPill.classList.remove('selected');
+              const prevIcon = pendingPill.querySelector('.icon'); if (prevIcon) prevIcon.textContent = '○';
+            }
+            pill.classList.add('selected'); icon.textContent = '✓';
+            pendingIso = iso; pendingPill = pill;
+            openConfirmModal(iso, slot);
+            return;
+          }
+          const isSelected = state.cart.includes(iso);
+          if (isSelected) {
+            state.cart = state.cart.filter(x => x !== iso);
+            pill.classList.remove('selected'); icon.textContent = '○';
+          } else {
+            if (state.cart.length >= MAX_SELECT) { alert(`You can pick up to ${MAX_SELECT}.`); return; }
+            state.cart.push(iso);
+            pill.classList.add('selected'); icon.textContent = '✓';
+          }
+          setCartBadge();
+        };
+
+        body.appendChild(pill);
+      });
+
+      col.appendChild(body);
+      weekDaysEl.appendChild(col);
+    });
+
+    emptyWeekBanner.classList.toggle('hide', (payload.exactCount || 0) > 0);
+    weekMetaEl.textContent = `Found ${payload.exactCount || 0} slot${(payload.exactCount || 0) === 1 ? '' : 's'}.`;
+    hideLoading();
+  }
+
+  /**********************
+   * Confirm modal
+   **********************/
+  function parseOptionsLoose(raw) {
+    if (Array.isArray(raw)) {
+      if (raw.length === 1 && /^\s*\[/.test(raw[0])) { try { const j = JSON.parse(raw[0]); if (Array.isArray(j)) return j; } catch { } }
+      return raw.map(String);
+    }
+    if (typeof raw === 'string') {
+      const s = raw.trim();
+      if (s.startsWith('[') && s.endsWith(']')) { try { const j = JSON.parse(s); if (Array.isArray(j)) return j; } catch { } }
+      return s.split(/[\n,;|]/).map(x => x.trim()).filter(Boolean);
+    }
+    return [];
+  }
+  function cleanLabel(s) {
+    return String(s).replace(/^\s*\[/, '').replace(/\]\s*$/, '').replace(/^["']|["']$/g, '').replace(/''/g, "'");
+  }
+
+  function openConfirmModal(iso, slot) {
+    const inviteListEl = document.getElementById('inviteList');
+    const addInviteBtn = document.getElementById('addInviteBtn');
+    const newInviteInp = document.getElementById('newInviteInput');
+    const qWrap = document.getElementById('confirmQuestionWrap');
+
+    const norm = s => String(s || '').trim();
+    const lower = s => norm(s).toLowerCase();
+    const isEmail = s => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(norm(s));
+
+    let candidates = (state.suggestedInvitees || []).map(e => ({ email: norm(e) }));
+    const havePreselected = Array.isArray(state.preselectedCustomerEmails) && state.preselectedCustomerEmails.length > 0;
+    const selected = new Set();
+    const seed = havePreselected ? state.preselectedCustomerEmails : (state.suggestedInvitees || []);
+    seed.forEach(e => { if (isEmail(e)) selected.add(lower(e)); });
+
+    function renderInviteList() {
+      inviteListEl.innerHTML = '';
+      if (!candidates.length) {
+        const p = document.createElement('p'); p.className = 'notice'; p.textContent = 'Add at least one attendee email to proceed.';
+        inviteListEl.appendChild(p);
+        validateConfirmEnabled(); return;
+      }
+      candidates.forEach((c, idx) => {
+        const row = document.createElement('label');
+        row.style.display = 'flex'; row.style.alignItems = 'center'; row.style.gap = '8px'; row.style.margin = '6px 0';
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.checked = selected.has(lower(c.email));
+        cb.addEventListener('change', () => {
+          const key = lower(c.email);
+          if (cb.checked) selected.add(key); else selected.delete(key);
+          validateConfirmEnabled();
+          saveCustomerEmailsDebounced(Array.from(selected));
+        });
+
+        const span = document.createElement('span'); span.textContent = c.email;
+
+        const rm = document.createElement('button'); rm.type = 'button'; rm.textContent = 'Remove'; rm.className = 'link-btn'; rm.style.marginLeft = 'auto';
+        rm.addEventListener('click', () => {
+          selected.delete(lower(c.email));
+          candidates.splice(idx, 1);
+          renderInviteList();
+          validateConfirmEnabled();
+          saveCustomerEmailsDebounced(Array.from(selected));
+          saveSuggestedInviteesDebounced(candidates.map(x => x.email));
+        });
+        if (!c._userAdded) rm.style.display = 'none';
+
+        row.append(cb, span, rm);
+        inviteListEl.appendChild(row);
+      });
+    }
+
+    function validateConfirmEnabled() {
+      const hasEmails = selected.size > 0;
+      let okQuestion = true;
+      if (state.confirmQuestion && state.confirmQuestion.required) {
+        const k = state.confirmQuestion.key;
+        const chosen = qWrap.querySelector('input[name="cq"]:checked');
+        okQuestion = !!chosen && norm(chosen.value);
+        if (okQuestion) saveConfirmAnswerDebounced(k, chosen.value);
+      }
+      confirmBtn.disabled = !(hasEmails && okQuestion);
+    }
+
+    function addNewInviteFromInput() {
+      const raw = norm(newInviteInp.value);
+      const lc = lower(raw);
+      if (!raw) return;
+      if (!isEmail(raw)) { alert('Please enter a valid email address.'); return; }
+      if (candidates.some(c => lower(c.email) === lc)) { alert('That address is already listed.'); return; }
+      candidates.push({ email: raw, _userAdded: true });
+      if (candidates.length > 15) candidates = candidates.slice(-15);
+      selected.add(lc);
+      newInviteInp.value = '';
+      renderInviteList();
+      validateConfirmEnabled();
+      saveSuggestedInviteesDebounced(candidates.map(c => c.email));
+      saveCustomerEmailsDebounced(Array.from(selected));
+    }
+
+    function maybeLoadInviteesFallbackThenRender() {
+      if (candidates.length) { renderInviteList(); validateConfirmEnabled(); return; }
+      inviteListEl.innerHTML = '<p class="notice">Loading suggested attendees…</p>';
+      apiGet('getInvitees', { token })
+        .then(res => {
+          const emails = (res && Array.isArray(res.emails)) ? res.emails : [];
+          candidates = emails
+            .map(norm)
+            .filter(isEmail)
+            .filter((v, i, a) => a.findIndex(x => lower(x) === lower(v)) === i)
+            .map(e => ({ email: e }));
+          candidates.forEach(c => selected.add(lower(c.email)));
+          renderInviteList(); validateConfirmEnabled();
+        })
+        .catch(() => { candidates = []; renderInviteList(); validateConfirmEnabled(); });
+    }
+
+    function renderConfirmQuestion() {
+      const cq = state.confirmQuestion;
+      qWrap.innerHTML = '';
+      if (!cq || !cq.label) { qWrap.classList.add('hide'); return; }
+      qWrap.classList.remove('hide'); qWrap.classList.add('notice');
+      const title = document.createElement('div'); title.className = 'cq-title'; title.textContent = cq.label + (cq.required ? ' *' : ''); qWrap.appendChild(title);
+      const options = parseOptionsLoose(cq.options).map(cleanLabel);
+      const saved = cq.saved != null ? cleanLabel(cq.saved) : null;
+
+      options.forEach(optRaw => {
+        const opt = cleanLabel(optRaw);
+        const id = 'cq_' + opt.replace(/\W+/g, '_');
+        const row = document.createElement('div'); row.className = 'cq-row';
+        const rb = document.createElement('input'); rb.type = 'radio'; rb.name = 'cq'; rb.id = id; rb.value = opt;
+        if (saved && saved === opt) rb.checked = true;
+        rb.addEventListener('change', () => { saveConfirmAnswerDebounced(cq.key, opt); validateConfirmEnabled(); });
+        const lab = document.createElement('label'); lab.setAttribute('for', id); lab.textContent = opt;
+        row.append(rb, lab); qWrap.appendChild(row);
+      });
+    }
+
+    const fmtDate = new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+    const fmtTime = new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, hour: '2-digit', minute: '2-digit', hour12: false });
+    const dateStr = s => new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }).format(s);
+    const timeStr = (s, e) => new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(s).replace(':', 'h') + '–' + new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(e).replace(':', 'h');
+
+    confirmWhen.textContent = ''; // set below when slot passed
+    renderConfirmQuestion();
+    maybeLoadInviteesFallbackThenRender();
+    confirmWhen.textContent = `${dateStr(slot.start)} • ${timeStr(slot.start, slot.end)}`;
+
+    addInviteBtn.onclick = () => {
+      newInviteInp.classList.toggle('hide');
+      if (!newInviteInp.classList.contains('hide')) newInviteInp.focus();
+    };
+    newInviteInp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addNewInviteFromInput(); } };
+    newInviteInp.onblur = () => { if (String(newInviteInp.value || '').trim()) addNewInviteFromInput(); };
+
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Confirm';
+    confirmBtn.classList.remove('success', 'error');
+
+    confirmModal.style.display = 'flex';
+
+    confirmBtn.onclick = () => {
+      if (selected.size === 0) { alert('Please add at least one attendee email.'); return; }
+      if (state.confirmQuestion && state.confirmQuestion.required) {
+        const chosen = document.querySelector('#confirmQuestionWrap input[name="cq"]:checked');
+        if (!chosen) { alert('Please answer the required question.'); return; }
+      }
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Booking…';
+      const explicitCustomerEmails = Array.from(selected);
+
+      apiPost('reserveSlots', { token }, { slots: [iso], extra: { explicitCustomerEmails } })
+        .then(() => {
+          confirmBtn.classList.add('success');
+          confirmBtn.textContent = 'Booked!';
+          setTimeout(() => {
+            confirmModal.style.display = 'none';
+            pendingIso = null; pendingPill = null;
+          }, 900);
+        })
+        .catch(err => {
+          confirmBtn.classList.add('error');
+          confirmBtn.textContent = 'Try again';
+          alert(err && err.message ? err.message : String(err));
+          confirmBtn.disabled = false;
+        });
+    };
+  }
+
+  function closeConfirmModal(revertIfAny = true) {
+    confirmModal.style.display = 'none';
+    if (revertIfAny && pendingPill) {
+      pendingPill.classList.remove('selected');
+      const icon = pendingPill.querySelector('.icon'); if (icon) icon.textContent = '○';
+    }
+    pendingIso = null; pendingPill = null;
+  }
+  closeConfirm.onclick = () => closeConfirmModal(true);
+  confirmModal.addEventListener('click', (e) => { if (e.target === confirmModal) closeConfirmModal(true); });
+
+  /**********************
+   * Cart (multi-select)
+   **********************/
+  function setCartBadge() {
+    if (MAX_SELECT === 1) return;
+    cartCount.textContent = `${state.cart.length} selected`;
+    submitBtn.disabled = state.cart.length === 0;
+  }
+  function openCartModal() {
+    selList.innerHTML = '';
+    if (state.cart.length === 0) {
+      emptyCartNote.classList.remove('hide');
+    } else {
+      emptyCartNote.classList.add('hide');
+      const allSlots = [];
+      for (const payload of state.weekCache.values()) allSlots.push(...payload.slotsParsed);
+      const items = state.cart
+        .map(iso => ({ iso, slot: allSlots.find(s => s.start.toISOString() === iso) }))
+        .filter(it => !!it.slot)
+        .sort((a, b) => a.slot.start - b.slot.start);
+
+      const fmtDate = new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+      const fmtTime = new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, hour: '2-digit', minute: '2-digit', hour12: false });
+
+      items.forEach(it => {
+        const row = document.createElement('div'); row.className = 'sel-item';
+        const when = document.createElement('div'); when.className = 'when';
+        const dateStr = fmtDate.format(it.slot.start);
+        const timeStr = fmtTime.format(it.slot.start).replace(':', 'h') + '–' + fmtTime.format(it.slot.end).replace(':', 'h');
+        when.textContent = `${dateStr} • ${timeStr}`;
+        const rm = document.createElement('button'); rm.className = 'link-btn'; rm.textContent = 'Remove';
+        rm.onclick = () => {
+          state.cart = state.cart.filter(x => x !== it.iso);
+          setCartBadge();
+          if (state.currentWeek) {
+            const cur = state.weekCache.get(state.currentWeek);
+            if (cur) renderWeek(cur);
+          }
+          openCartModal();
+        };
+        row.append(when, rm);
+        selList.appendChild(row);
+      });
+    }
+    cartModal.style.display = 'flex';
+  }
+  function closeCartModal() { cartModal.style.display = 'none'; }
+
+  submitBtn.onclick = () => {
+    if (state.cart.length === 0) return;
+    submitBtn.disabled = true; submitBtn.textContent = 'Submitting…';
+    apiPost('reserveSlots', { token }, { slots: state.cart.slice(0, MAX_SELECT) })
+      .then(() => { submitBtn.classList.add('success'); submitBtn.textContent = 'Sent!'; closeCartModal(); })
+      .catch(err => { submitBtn.classList.add('error'); submitBtn.textContent = 'Try again'; alert((err && err.message) || String(err)); submitBtn.disabled = false; });
+  };
+  modalSubmit.onclick = () => { if (MAX_SELECT !== 1) submitBtn.click(); };
+  cartCount.onclick = () => { if (MAX_SELECT !== 1) openCartModal(); };
+  closeCart.onclick = closeCartModal;
+  cartModal.addEventListener('click', (e) => { if (e.target === cartModal) closeCartModal(); });
+  clearAll.onclick = () => {
+    if (!state.cart.length) return;
+    if (!confirm('Clear all selections?')) return;
+    state.cart = [];
+    setCartBadge();
+    const cur = state.weekCache.get(state.currentWeek);
+    if (cur) renderWeek(cur);
+    openCartModal();
+  };
+
+  /**********************
+   * Events & wiring
+   **********************/
+  tzSel.addEventListener('change', () => {
+    state.tz = tzSel.value;
+    if (!overviewView.classList.contains('hide')) {
+      renderOverview();
+    } else {
+      const cur = state.weekCache.get(state.currentWeek);
+      if (cur) renderWeek(cur);
+    }
+    if (cartModal.style.display === 'flex') openCartModal();
+  });
+
+  tabOverview.onclick = renderOverview;
+  tabWeek.onclick = () => {
+    if (!state.currentWeek) {
+      const months = [...state.monthWeeks.keys()].sort();
+      if (months.length) {
+        const wk = state.monthWeeks.get(months[0])?.[0];
+        if (wk) return openWeek(wk);
+      }
+    }
+    if (state.currentWeek) openWeek(state.currentWeek);
+  };
+
+  prevWeekBtn.onclick = () => {
+    if (!state.currentWeek) return;
+    const wk = plusDaysKey(state.currentWeek, -7);
+    openWeek(wk);
+  };
+  nextWeekBtn.onclick = () => {
+    if (!state.currentWeek) return;
+    const wk = plusDaysKey(state.currentWeek, 7);
+    openWeek(wk);
+  };
+
+  /**********************
+   * TZ select populate
+   **********************/
+  function populateTzSelect(zones, initial) {
+    tzSel.innerHTML = '';
+    (zones || []).forEach(z => {
+      const opt = document.createElement('option');
+      opt.value = z; opt.textContent = z;
+      if (z === initial) opt.selected = true;
+      tzSel.appendChild(opt);
+    });
+    state.tz = initial || state.tz || 'UTC';
+    tzSel.onchange = () => {
+      state.tz = tzSel.value;
+      if (state.currentWeek && state.weekCache.has(state.currentWeek)) {
+        renderWeek(state.weekCache.get(state.currentWeek));
+      }
+    };
+  }
+
+  /**********************
+   * Boot
+   **********************/
+  function init() {
+    if (!token) {
+      alert('Missing token in URL (?token=...)');
+      return;
+    }
+    showLoading('Fetching availability…');
+
+    apiGet('getBootstrapAndHeatmap', { token })
+      .then(res => {
+        try {
+          // Timezones
+          if (Array.isArray(res.timezones)) timezones = res.timezones;
+          if (res.initialTz) initialTz = res.initialTz;
+          populateTzSelect(timezones, initialTz);
+
+          // Optional: colleague initials/name if backend includes it
+          if (res.colleagueInitials && colleagueNameEl) colleagueNameEl.textContent = res.colleagueInitials || '';
+
+          // Selection cap
+          MAX_SELECT = Number(res.maxHolds || 1);
+
+          // Suggestions / confirm question
+          state.suggestedInvitees = Array.isArray(res.suggestedInvitees) ? res.suggestedInvitees : [];
+          state.preselectedCustomerEmails = Array.isArray(res.preselectedCustomerEmails) ? res.preselectedCustomerEmails : [];
+          state.confirmQuestion = res.confirmQuestion || null;
+
+          // Overview groups (month -> weeks)
+          state.monthWeeks = new Map();
+          const mw = res.weekly && res.weekly.monthWeeks ? res.weekly.monthWeeks : {};
+          Object.keys(mw).sort().forEach(ym => {
+            const weeks = (mw[ym] || []).map(w => ({
+              week: String(w.week),
+              count: Number(w.count || 0),
+              startISO: String(w.startISO),
+              weekNum: isoWeekNumberFromKey(String(w.startISO).slice(0, 10))
+            }));
+            state.monthWeeks.set(ym, weeks);
+          });
+
+          renderOverview();
+        } finally {
+          hideLoading();
+        }
+      })
+      .catch(err => {
+        hideLoading();
+        alert((err && err.message) || 'Failed to load bootstrap.');
+      });
+  }
+
+  // Kick things off:
+  init();
+</script>
+
+</body>
+</html>
