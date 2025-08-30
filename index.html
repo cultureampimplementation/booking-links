@@ -266,15 +266,18 @@
   }
   async function apiPost(action, params, body) {
     const qs = new URLSearchParams({ action, ...(params || {}) });
-    const res = await fetch(`${API_BASE}?${qs.toString()}`, {
+    const res = await fetch(`${API_BASE}?${qs}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body || {}),
+      // IMPORTANT: keep this a "simple request"
+      headers: { 'Content-Type': 'text/plain' },   // <-- not application/json
+      body: JSON.stringify(body || {}),            // still send JSON as text
       credentials: 'omit'
     });
-    if (!res.ok) throw new Error(`POST ${action} failed: ${res.status}`);
-    return res.json();
+    const data = await res.json();                 // GAS always 200
+    if (data && data.error) throw new Error(data.error);
+    return data;
   }
+
 
   /**********************
    * Debounced server writes
