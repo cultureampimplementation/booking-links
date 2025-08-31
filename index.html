@@ -278,6 +278,27 @@
     return data;
   }
 
+  function buildMonthWeeksFromWeekList(weeks) {
+    // weeks: [{ mondayKey, startISO, weekNum, selectable }]
+    const monthWeeks = new Map();
+    (weeks || []).forEach(w => {
+      const startISO = String(w.startISO);
+      const ym = startISO.slice(0, 7); // "YYYY-MM"
+      if (!monthWeeks.has(ym)) monthWeeks.set(ym, []);
+      monthWeeks.get(ym).push({
+        week: w.mondayKey ? `W${String(w.weekNum).padStart(2,'0')}` : `W${w.weekNum}`,
+        weekNum: Number(w.weekNum),
+        startISO,
+        selectable: !!w.selectable
+      });
+    });
+    for (const arr of monthWeeks.values()) {
+      arr.sort((a,b) => a.startISO.localeCompare(b.startISO));
+    }
+    return monthWeeks;
+  }
+
+
 
   /**********************
    * Debounced server writes
@@ -419,62 +440,60 @@
   function renderOverview() {
     showOnly('overview');
     setBreadcrumbForOverview();
-
+  
     ovGrid.innerHTML = '';
     if (!state?.monthWeeks || state.monthWeeks.size === 0) {
       const empty = document.createElement('div');
       empty.className = 'notice';
-      empty.textContent = 'No availability in the current window.';
+      empty.textContent = 'No weeks available in the current window.';
       ovGrid.appendChild(empty);
       return;
     }
-    const months = [...state.monthWeeks.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  
+    const months = [...state.monthWeeks.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
     months.forEach(([ym, weeks]) => {
       const [y, m] = ym.split('-').map(Number);
+  
       const card = document.createElement('div'); card.className = 'mcard';
       const head = document.createElement('div'); head.className = 'mhead';
       const name = document.createElement('div'); name.className = 'mname'; name.textContent = monthTitle(y, m);
       head.appendChild(name); card.appendChild(head);
-
+  
       const list = document.createElement('div'); list.className = 'weeks';
-      const max = weeks.reduce((mx, w) => Math.max(mx, Number(w.count || 0)), 0);
-
+  
       weeks.forEach(w => {
-        const v = Number(w.count || 0);
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'week-pill';
-        btn.textContent = `${formatWeekLabel(w.startISO)} — Wk ${w.weekNum} (${v} ${v === 1 ? 'slot' : 'slots'})`;
-        if (v === 0) {
-          btn.classList.add('zero'); btn.disabled = true;
+        btn.textContent = `${formatWeekLabel(w.startISO)} — Wk ${w.weekNum}`;
+  
+        const monKey = w.startISO.slice(0,10);
+        if (!w.selectable) {
+          // too soon (within minNoticeDays): show muted & disabled
+          btn.classList.add('disabled');
+          btn.disabled = true;
         } else {
-          const bg = weekColorForValue(v, max) || '#e8f1ff';
-          btn.style.background = bg; btn.style.borderColor = 'rgba(15,23,42,.10)';
-          if (needsLightText(bg)) btn.classList.add('lightText');
-          const monKey = w.startISO.slice(0, 10);
           btn.addEventListener('click', () => openWeek(monKey));
         }
         list.appendChild(btn);
       });
-
+  
       card.appendChild(list);
       ovGrid.appendChild(card);
     });
-
+  
     hideLoading();
   }
+
 
   /**********************
    * Week data & rendering (fetch via API)
    **********************/
-  function ensureWeekLoaded(mondayKey, { prefetch = false } = {}) {
+  function ensureWeekLoaded(mondayKey, { prefetch=false } = {}) {
     if (state.weekCache.has(mondayKey)) return Promise.resolve(state.weekCache.get(mondayKey));
     pendingWeekKey = mondayKey;
-    return apiGet('fetchWeek', { token, mondayKey })
-      .then(res => {
-        const parsed = parseSlots(res && res.slots ? res.slots : []);
-        const payload = { slotsParsed: parsed, exactCount: parsed.length };
-        state.weekCache.set(mondayKey, payload);
+    return loadWeekCoarseToFine(mondayKey, { prefetch })
+      .then(payload => {
         if (!prefetch && state.currentWeek === mondayKey && pendingWeekKey === mondayKey) {
           renderWeek(payload);
         }
@@ -484,7 +503,7 @@
         if (!prefetch) alert('Failed to load week.\n' + (err && err.message ? err.message : String(err)));
         throw err;
       })
-      .finally(() => { if (pendingWeekKey === mondayKey) pendingWeekKey = null; });
+      .finally(() => { if (pendingWeekKey === mondayKey) pendingWeekKey = null; hideLoading(); });
   }
 
   function openWeek(mondayKey) {
@@ -492,14 +511,11 @@
     showOnly('week');
     setBreadcrumbForWeek(mondayKey);
     setWeekHeader(mondayKey);
-
     showLoading('Loading this week…');
-    ensureWeekLoaded(mondayKey).then(payload => {
-      if (state.currentWeek === mondayKey) {
-        renderWeek(payload);
-        prefetchNeighbors(mondayKey);
-      }
-    }).finally(hideLoading);
+  
+    ensureWeekLoaded(mondayKey).then(() => {
+      if (state.currentWeek === mondayKey) prefetchNeighbors(mondayKey);
+    });
   }
 
   function setWeekHeader(mondayKey) {
@@ -510,7 +526,13 @@
   function prefetchNeighbors(mondayKey) {
     const next = plusDaysKey(mondayKey, 7);
     const prev = plusDaysKey(mondayKey, -7);
-    ensureWeekLoaded(next, { prefetch: true }).finally(() => ensureWeekLoaded(prev, { prefetch: true }));
+    // For prefetch, do the 60-min pass only (fast & light)
+    fetchWeekAtGranularity(next, 60).then(r => {
+      state.weekCache.set(next, { slotsParsed: r.parsed, exactCount: r.count });
+    }).catch(()=>{});
+    fetchWeekAtGranularity(prev, 60).then(r => {
+      state.weekCache.set(prev, { slotsParsed: r.parsed, exactCount: r.count });
+    }).catch(()=>{});
   }
 
   function renderWeek(payload) {
@@ -854,6 +876,37 @@
     openCartModal();
   };
 
+  async function fetchWeekAtGranularity(mondayKey, g) {
+    const res = await apiGet('fetchWeek', { token, mondayKey, g });
+    const parsed = parseSlots(res && res.slots ? res.slots : []);
+    return { parsed, count: parsed.length, g };
+  }
+  
+  async function loadWeekCoarseToFine(mondayKey, { prefetch=false } = {}) {
+    // UI cue (only when visible)
+    if (!prefetch) showLoading('Scanning top-of-the-hour…');
+  
+    // 60-min pass
+    let all = await fetchWeekAtGranularity(mondayKey, 60);
+    if (!prefetch && all.count < 3) { showLoading('Going deeper (30-min)…'); }
+    // 30-min pass (only if needed)
+    if (all.count < 3) {
+      const next = await fetchWeekAtGranularity(mondayKey, 30);
+      all = { parsed: [...all.parsed, ...next.parsed].sort((a,b)=>a.start-b.start), count: all.count + next.count };
+    }
+    // 15-min pass (only if still needed)
+    if (all.count < 3) {
+      if (!prefetch) showLoading('Going deeper (15-min)…');
+      const next = await fetchWeekAtGranularity(mondayKey, 15);
+      all = { parsed: [...all.parsed, ...next.parsed].sort((a,b)=>a.start-b.start), count: all.count + next.count };
+    }
+  
+    const payload = { slotsParsed: all.parsed, exactCount: all.count };
+    state.weekCache.set(mondayKey, payload);
+    return payload;
+  }
+
+
   /**********************
    * Events & wiring
    **********************/
@@ -915,44 +968,31 @@
    * Boot
    **********************/
   function init() {
-    if (!token) {
-      alert('Missing token in URL (?token=...)');
-      return;
-    }
-    showLoading('Fetching availability…');
-
-    apiGet('getBootstrapAndHeatmap', { token })
+    if (!token) { alert('Missing token in URL (?token=...)'); return; }
+    showLoading('Loading weeks…');
+  
+    // New, small bootstrap: list of weeks (24 by default)
+    apiGet('getWeekList', { token, weeks: 24 })
       .then(res => {
         try {
-          // Timezones
+          // timezones + tz
           if (Array.isArray(res.timezones)) timezones = res.timezones;
           if (res.initialTz) initialTz = res.initialTz;
           populateTzSelect(timezones, initialTz);
-
-          // Optional: colleague initials/name if backend includes it
-          if (res.colleagueInitials && colleagueNameEl) colleagueNameEl.textContent = res.colleagueInitials || '';
-
-          // Selection cap
+  
+          // small UI bits
           MAX_SELECT = Number(res.maxHolds || 1);
-
-          // Suggestions / confirm question
           state.suggestedInvitees = Array.isArray(res.suggestedInvitees) ? res.suggestedInvitees : [];
           state.preselectedCustomerEmails = Array.isArray(res.preselectedCustomerEmails) ? res.preselectedCustomerEmails : [];
           state.confirmQuestion = res.confirmQuestion || null;
-
-          // Overview groups (month -> weeks)
-          state.monthWeeks = new Map();
-          const mw = res.weekly && res.weekly.monthWeeks ? res.weekly.monthWeeks : {};
-          Object.keys(mw).sort().forEach(ym => {
-            const weeks = (mw[ym] || []).map(w => ({
-              week: String(w.week),
-              count: Number(w.count || 0),
-              startISO: String(w.startISO),
-              weekNum: isoWeekNumberFromKey(String(w.startISO).slice(0, 10))
-            }));
-            state.monthWeeks.set(ym, weeks);
-          });
-
+  
+          // colleague label (if you return it)
+          if (res.colleagueInitials && colleagueNameEl) colleagueNameEl.textContent = res.colleagueInitials || '';
+  
+          // weeks list → monthWeeks map (with selectable flag)
+          state.monthWeeks = buildMonthWeeksFromWeekList(res.weeks || []);
+  
+          // render the month cards with week pills
           renderOverview();
         } finally {
           hideLoading();
@@ -960,9 +1000,10 @@
       })
       .catch(err => {
         hideLoading();
-        alert((err && err.message) || 'Failed to load bootstrap.');
+        alert((err && err.message) || 'Failed to load week list.');
       });
   }
+
 
   // Kick things off:
   init();
