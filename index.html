@@ -974,6 +974,15 @@
     // New, small bootstrap: list of weeks (24 by default)
     apiGet('getWeekList', { token, weeks: 24 })
       .then(res => {
+
+        console.log('🌐 getWeekList response:', res);
+        console.table((res.weeks || []).map(w => ({
+          mondayKey: (w.mondayKey || (w.startISO || '').slice(0,10)),
+          weekNum: w.weekNum,
+          selectable: !!w.selectable,
+          startISO: w.startISO
+        })));
+        
         try {
           // timezones + tz
           if (Array.isArray(res.timezones)) timezones = res.timezones;
