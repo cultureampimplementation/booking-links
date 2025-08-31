@@ -449,6 +449,8 @@
       ovGrid.appendChild(empty);
       return;
     }
+
+    console.log('🟪 Rendering overview weeks:', [...state.monthWeeks.entries()]);
   
     const months = [...state.monthWeeks.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
     months.forEach(([ym, weeks]) => {
