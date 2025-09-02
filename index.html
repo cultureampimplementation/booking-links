@@ -260,23 +260,30 @@
 
   async function apiGet(action, params) {
     const qs = new URLSearchParams({ action, ...(params || {}) });
-    const res = await fetch(`${API_BASE}?${qs.toString()}`, { credentials: 'omit' });
+    qs.set('ts', Date.now()); // cache-buster
+    const res = await fetch(`${API_BASE}?${qs.toString()}`, {
+      credentials: 'omit',
+      cache: 'no-store'
+    });
     if (!res.ok) throw new Error(`GET ${action} failed: ${res.status}`);
     return res.json();
   }
+  
   async function apiPost(action, params, body) {
     const qs = new URLSearchParams({ action, ...(params || {}) });
+    qs.set('ts', Date.now()); // cache-buster
     const res = await fetch(`${API_BASE}?${qs}`, {
       method: 'POST',
-      // IMPORTANT: keep this a "simple request"
-      headers: { 'Content-Type': 'text/plain' },   // <-- not application/json
-      body: JSON.stringify(body || {}),            // still send JSON as text
-      credentials: 'omit'
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(body || {}),
+      credentials: 'omit',
+      cache: 'no-store'
     });
-    const data = await res.json();                 // GAS always 200
+    const data = await res.json();
     if (data && data.error) throw new Error(data.error);
     return data;
   }
+
 
   function buildMonthWeeksFromWeekList(weeks) {
     // weeks: [{ mondayKey, startISO, weekNum, selectable }]
