@@ -135,6 +135,32 @@
     #confirmQuestionWrap .cq-row { display:flex; align-items:center; gap:8px; margin:4px 0; }
     #confirmQuestionWrap label { cursor: pointer; }
 
+    /* USED / CLOSED state */
+    .used-wrap { margin-top: 16px; }
+    .used-card {
+      border: 1px solid #e5e7eb; border-radius: 14px; background:#fff;
+      padding: 18px; display:flex; gap:14px; align-items:flex-start;
+      box-shadow: 0 2px 10px rgba(0,0,0,.04);
+    }
+    .used-icon {
+      font-size: 22px; line-height: 1; background:#fee2e2; color:#b91c1c;
+      border:1px solid #fecaca; border-radius:10px; padding:8px 10px;
+    }
+    .used-body { flex:1; }
+    .used-title { margin:0 0 6px; font-weight:800; font-size:18px; }
+    .used-sub { margin:0; color:#555; font-size:14px; }
+    .used-meta { margin-top:8px; font-size:13px; color:#666; }
+    .used-actions { margin-top:12px; display:flex; gap:10px; align-items:center; }
+    .used-btn {
+      display:inline-block; padding:8px 12px; border-radius:8px;
+      border:1px solid #d1d5db; background:#f8fafc; cursor:pointer; font-size:14px;
+    }
+    .used-chip {
+      display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px;
+      font-size:12px; border:1px solid #fecaca; background:#fff1f2; color:#b91c1c; font-weight:700;
+    }
+
+
 
   </style>
 </head>
@@ -500,14 +526,79 @@
     document.getElementById('overviewView')?.classList.add('hide');
     document.getElementById('weekView')?.classList.add('hide');
   
-    // Show a clear message
-    const n = document.getElementById('notice');
-    n.innerHTML = `
-      This link has already been used${meta?.isRebook ? ' (rebook flow closed)' : ''}.
-      If you need to reschedule, please contact your Culture Amp team.
-    `;
-    n.classList.add('error'); // uses your existing styling
+    // Optional: tweak the H1
+    const h1 = document.querySelector('h1');
+    if (h1) h1.textContent = 'This booking link is closed';
+  
+    // Clear the small notice line
+    const notice = document.getElementById('notice');
+    if (notice) notice.classList.add('hide');
+  
+    // Build a nice card
+    const wrap = document.createElement('div');
+    wrap.className = 'used-wrap';
+  
+    const card = document.createElement('div');
+    card.className = 'used-card';
+  
+    const icon = document.createElement('div');
+    icon.className = 'used-icon';
+    icon.textContent = '🔒';
+  
+    const body = document.createElement('div');
+    body.className = 'used-body';
+  
+    const title = document.createElement('h2');
+    title.className = 'used-title';
+    title.textContent = 'This booking link has already been used';
+  
+    const sub = document.createElement('p');
+    sub.className = 'used-sub';
+    sub.textContent = 'Thanks for booking. If you need to reschedule, we can help.';
+  
+    const metaLine = document.createElement('div');
+    metaLine.className = 'used-meta';
+    const who = meta?.colleagueInitials ? ` with ${meta.colleagueInitials}` : '';
+    const mt = meta?.meetingType ? ` — ${meta.meetingType}` : '';
+    metaLine.textContent = `Status: ${meta?.status || 'USED'}${who}${mt}`;
+  
+    const chips = document.createElement('div');
+    chips.className = 'used-actions';
+  
+    const usedChip = document.createElement('span');
+    usedChip.className = 'used-chip';
+    usedChip.innerHTML = 'USED';
+  
+    chips.appendChild(usedChip);
+  
+    if (meta?.allowRebook) {
+      const info = document.createElement('span');
+      info.className = 'used-sub';
+      info.textContent = 'Rebooking is enabled for this link.';
+      chips.appendChild(info);
+    }
+  
+    if (meta?.colleagueEmail) {
+      const btn = document.createElement('a');
+      btn.className = 'used-btn';
+      btn.href = `mailto:${encodeURIComponent(meta.colleagueEmail)}?subject=Reschedule%20my%20meeting`;
+      btn.textContent = 'Email your Culture Amp contact';
+      chips.appendChild(btn);
+    }
+  
+    body.append(title, sub, metaLine, chips);
+    card.append(icon, body);
+    wrap.append(card);
+  
+    // Insert below the header
+    const afterH1 = document.querySelector('h1');
+    if (afterH1 && afterH1.parentNode) {
+      afterH1.parentNode.insertBefore(wrap, afterH1.nextSibling);
+    } else {
+      document.body.prepend(wrap);
+    }
   }
+
 
 
   /**********************
