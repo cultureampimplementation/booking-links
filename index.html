@@ -494,6 +494,21 @@
     hideLoading();
   }
 
+  function renderUsedState(meta) {
+    // Hide interactive UI
+    document.querySelector('.controls')?.classList.add('hide');
+    document.getElementById('overviewView')?.classList.add('hide');
+    document.getElementById('weekView')?.classList.add('hide');
+  
+    // Show a clear message
+    const n = document.getElementById('notice');
+    n.innerHTML = `
+      This link has already been used${meta?.isRebook ? ' (rebook flow closed)' : ''}.
+      If you need to reschedule, please contact your Culture Amp team.
+    `;
+    n.classList.add('error'); // uses your existing styling
+  }
+
 
   /**********************
    * Week data & rendering (fetch via API)
