@@ -245,7 +245,7 @@
   const API_BASE = 'https://script.google.com/macros/s/AKfycbwqqw_6MRAR9zkkDg6-vUNNETC1UQpS0sdIF6iSh-zT29FbKOcZkkkN-x3aqkvdyI7f8A/exec';
 
   // Token comes from URL: https://.../index.html?token=abc123
-  const token = new URLSearchParams(location.search).get('token') || '';
+  const token = (new URLSearchParams(location.search).get('token') || '').trim();
 
   /**********************
    * Small helpers
@@ -260,7 +260,7 @@
 
   async function apiGet(action, params) {
     const qs = new URLSearchParams({ action, ...(params || {}) });
-    qs.set('ts', Date.now()); // cache-buster
+    qs.set('ts', Date.now()); // cache buster
     const res = await fetch(`${API_BASE}?${qs.toString()}`, {
       credentials: 'omit',
       cache: 'no-store'
@@ -271,7 +271,7 @@
   
   async function apiPost(action, params, body) {
     const qs = new URLSearchParams({ action, ...(params || {}) });
-    qs.set('ts', Date.now()); // cache-buster
+    qs.set('ts', Date.now()); // cache buster
     const res = await fetch(`${API_BASE}?${qs}`, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
@@ -992,49 +992,61 @@
    * Boot
    **********************/
   function init() {
-    if (!token) { alert('Missing token in URL (?token=...)'); return; }
-    showLoading('Loading weeks…');
+    const t = token;
+    if (!t) { alert('Missing token in URL (?token=...)'); return; }
   
-    // New, small bootstrap: list of weeks (24 by default)
-    apiGet('getWeekList', { token, weeks: 24 })
-      .then(res => {
-
-        console.log('🌐 getWeekList response:', res);
-        console.table((res.weeks || []).map(w => ({
-          mondayKey: (w.mondayKey || (w.startISO || '').slice(0,10)),
-          weekNum: w.weekNum,
-          selectable: !!w.selectable,
-          startISO: w.startISO
-        })));
-        
-        try {
-          // timezones + tz
-          if (Array.isArray(res.timezones)) timezones = res.timezones;
-          if (res.initialTz) initialTz = res.initialTz;
-          populateTzSelect(timezones, initialTz);
+    showLoading('Checking your link…');
   
-          // small UI bits
-          MAX_SELECT = Number(res.maxHolds || 1);
-          state.suggestedInvitees = Array.isArray(res.suggestedInvitees) ? res.suggestedInvitees : [];
-          state.preselectedCustomerEmails = Array.isArray(res.preselectedCustomerEmails) ? res.preselectedCustomerEmails : [];
-          state.confirmQuestion = res.confirmQuestion || null;
+    // 1) Gate on invite status first
+    apiGet('getInviteMeta', { token: t })
+      .then(meta => {
+        if (!meta?.ok) throw new Error(meta?.error || 'Meta fetch failed');
   
-          // colleague label (if you return it)
-          if (res.colleagueInitials && colleagueNameEl) colleagueNameEl.textContent = res.colleagueInitials || '';
+        // quick UI bits
+        if (meta.colleagueInitials && colleagueNameEl) colleagueNameEl.textContent = meta.colleagueInitials;
+        if (meta.initialTz) initialTz = meta.initialTz;
+        if (typeof meta.maxHolds === 'number') MAX_SELECT = meta.maxHolds;
   
-          // weeks list → monthWeeks map (with selectable flag)
-          state.monthWeeks = buildMonthWeeksFromWeekList(res.weeks || []);
-  
-          // render the month cards with week pills
-          renderOverview();
-        } finally {
+        // gate: only NEW or explicitly allowed rebooks proceed
+        if (meta.status !== 'NEW' && !meta.allowRebook) {
           hideLoading();
+          renderUsedState(meta);
+          // stop here
+          return Promise.reject(new Error('used_link'));
         }
+  
+        showLoading('Loading weeks…');
+        // 2) Now fetch the week list & render as before
+        return apiGet('getWeekList', { token: t, weeks: 24 });
+      })
+      .then(res => {
+        // safety: gate here too if backend also returns status
+        if (res?.status && res.status !== 'NEW' && !res.allowRebook) {
+          hideLoading();
+          return renderUsedState(res);
+        }
+  
+        // your existing success path
+        if (Array.isArray(res.timezones)) timezones = res.timezones;
+        if (res.initialTz) initialTz = res.initialTz;
+        populateTzSelect(timezones, initialTz);
+  
+        MAX_SELECT = Number(res.maxHolds || MAX_SELECT || 1);
+        state.suggestedInvitees = Array.isArray(res.suggestedInvitees) ? res.suggestedInvitees : [];
+        state.preselectedCustomerEmails = Array.isArray(res.preselectedCustomerEmails) ? res.preselectedCustomerEmails : [];
+        state.confirmQuestion = res.confirmQuestion || null;
+  
+        if (res.colleagueInitials && colleagueNameEl) colleagueNameEl.textContent = res.colleagueInitials || '';
+  
+        state.monthWeeks = buildMonthWeeksFromWeekList(res.weeks || []);
+        renderOverview();
       })
       .catch(err => {
-        hideLoading();
-        alert((err && err.message) || 'Failed to load week list.');
-      });
+        if (String(err?.message) !== 'used_link') {
+          alert((err && err.message) || 'Failed to initialize.');
+        }
+      })
+      .finally(hideLoading);
   }
 
 
