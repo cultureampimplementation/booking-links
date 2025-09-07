@@ -352,9 +352,23 @@
   /**********************
    * Debounced server writes
    **********************/
-  const saveSuggestedInviteesDebounced = debounce((emails) => {
+  function makeDebounce(fn, wait=400){
+    let t, lastArgs;
+    const call = (...args) => { lastArgs=args; clearTimeout(t); t=setTimeout(()=>{fn(...lastArgs); t=null;}, wait); };
+    call.flush = () => { if (t){ clearTimeout(t); fn(...(lastArgs||[])); t=null; } };
+    return call;
+  }
+  const saveSuggestedInviteesDebounced = makeDebounce((emails)=> {
     apiPost('saveSuggestedInvitees', { token }, { emails }).catch(console.error);
   }, 400);
+  
+  // before hiding the confirm modal:
+  confirmModal.addEventListener('click', (e) => {
+    if (e.target === confirmModal) {
+      saveSuggestedInviteesDebounced.flush();
+      closeConfirmModal(true);
+    }
+  });
 
   const saveCustomerEmailsDebounced = debounce((emails) => {
     apiPost('saveCustomerEmails', { token }, { emails }).catch(console.error);
@@ -793,6 +807,11 @@
     const norm = s => String(s || '').trim();
     const lower = s => norm(s).toLowerCase();
     const isEmail = s => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(norm(s));
+
+    const union = Array.from(new Set([
+      ...(state.suggestedInvitees || []),
+      ...(state.preselectedCustomerEmails || [])
+    ].map(norm))).filter(isEmail);
 
     let candidates = (state.suggestedInvitees || []).map(e => ({ email: norm(e) }));
     const havePreselected = Array.isArray(state.preselectedCustomerEmails) && state.preselectedCustomerEmails.length > 0;
