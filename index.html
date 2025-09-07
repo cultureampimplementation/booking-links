@@ -1043,11 +1043,11 @@
   
   async function loadWeekCoarseToFine(mondayKey, { prefetch=false } = {}) {
     // UI cue (only when visible)
-    if (!prefetch) showLoading('Scanning top-of-the-hour…');
+    if (!prefetch) showLoading('Scanning for availability…');
   
     // 60-min pass
     let all = await fetchWeekAtGranularity(mondayKey, 60);
-    if (!prefetch && all.count < 3) { showLoading('Going deeper (30-min)…'); }
+    if (!prefetch && all.count < 3) { showLoading('Looking for prep slots…'); }
     // 30-min pass (only if needed)
     if (all.count < 3) {
       const next = await fetchWeekAtGranularity(mondayKey, 30);
@@ -1055,7 +1055,7 @@
     }
     // 15-min pass (only if still needed)
     if (all.count < 3) {
-      if (!prefetch) showLoading('Going deeper (15-min)…');
+      if (!prefetch) showLoading('Taking a closer look…');
       const next = await fetchWeekAtGranularity(mondayKey, 15);
       all = { parsed: [...all.parsed, ...next.parsed].sort((a,b)=>a.start-b.start), count: all.count + next.count };
     }
