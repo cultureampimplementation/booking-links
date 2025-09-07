@@ -1138,7 +1138,15 @@
         if (!meta?.ok) throw new Error(meta?.error || 'Meta fetch failed');
   
         // quick UI bits
-        if (meta.colleagueInitials && colleagueNameEl) colleagueNameEl.textContent = meta.colleagueInitials;
+        
+        // prefer first name, then initials, then email (last resort)
+        const displayName =
+          meta.colleagueFirstName ||
+          meta.colleagueEmail ||
+          '';
+        
+        if (colleagueNameEl) colleagueNameEl.textContent = displayName;
+
         if (meta.initialTz) initialTz = meta.initialTz;
         if (typeof meta.maxHolds === 'number') MAX_SELECT = meta.maxHolds;
   
@@ -1170,8 +1178,6 @@
         state.suggestedInvitees = Array.isArray(res.suggestedInvitees) ? res.suggestedInvitees : [];
         state.preselectedCustomerEmails = Array.isArray(res.preselectedCustomerEmails) ? res.preselectedCustomerEmails : [];
         state.confirmQuestion = res.confirmQuestion || null;
-  
-        if (res.colleagueInitials && colleagueNameEl) colleagueNameEl.textContent = res.colleagueInitials || '';
   
         state.monthWeeks = buildMonthWeeksFromWeekList(res.weeks || []);
         renderOverview();
