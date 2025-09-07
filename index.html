@@ -929,7 +929,8 @@
 
     confirmWhen.textContent = ''; // set below when slot passed
     renderConfirmQuestion();
-    maybeLoadInviteesFallbackThenRender();
+    renderInviteList();     
+    validateConfirmEnabled();
     confirmWhen.textContent = `${dateStr(slot.start)} • ${timeStr(slot.start, slot.end)}`;
 
     addInviteBtn.onclick = () => {
