@@ -1086,7 +1086,7 @@
       const months = [...state.monthWeeks.keys()].sort();
       if (months.length) {
         const wk = state.monthWeeks.get(months[0])?.[0];
-        if (wk) return openWeek(wk);
+        if (wk) return openWeek(String(wk.startISO).slice(0,10));
       }
     }
     if (state.currentWeek) openWeek(state.currentWeek);
