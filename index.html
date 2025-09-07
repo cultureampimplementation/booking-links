@@ -1147,6 +1147,18 @@
         
         if (colleagueNameEl) colleagueNameEl.textContent = displayName;
 
+        // prime invitee data early from meta (Option A)
+        if (Array.isArray(meta.suggestedInvitees)) {
+          state.suggestedInvitees = meta.suggestedInvitees;
+        }
+        if (Array.isArray(meta.preselectedCustomerEmails)) {
+          state.preselectedCustomerEmails = meta.preselectedCustomerEmails;
+        }
+        if (meta.confirmQuestion) {
+          state.confirmQuestion = meta.confirmQuestion;
+        }
+
+
         if (meta.initialTz) initialTz = meta.initialTz;
         if (typeof meta.maxHolds === 'number') MAX_SELECT = meta.maxHolds;
   
