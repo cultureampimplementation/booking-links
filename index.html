@@ -361,14 +361,6 @@
   const saveSuggestedInviteesDebounced = makeDebounce((emails)=> {
     apiPost('saveSuggestedInvitees', { token }, { emails }).catch(console.error);
   }, 400);
-  
-  // before hiding the confirm modal:
-  confirmModal.addEventListener('click', (e) => {
-    if (e.target === confirmModal) {
-      saveSuggestedInviteesDebounced.flush();
-      closeConfirmModal(true);
-    }
-  });
 
   const saveCustomerEmailsDebounced = debounce((emails) => {
     apiPost('saveCustomerEmails', { token }, { emails }).catch(console.error);
@@ -429,6 +421,13 @@
   const confirmBtn = document.getElementById('confirmBtn');
   const closeConfirm = document.getElementById('closeConfirm');
   const colleagueNameEl = document.getElementById('colleagueName');
+
+  confirmModal.addEventListener('click', (e) => {
+    if (e.target === confirmModal) {
+      saveSuggestedInviteesDebounced.flush();
+      closeConfirmModal(true);
+    }
+  });
 
   let pendingIso = null;
   let pendingPill = null;
@@ -812,12 +811,12 @@
       ...(state.suggestedInvitees || []),
       ...(state.preselectedCustomerEmails || [])
     ].map(norm))).filter(isEmail);
-
-    let candidates = (state.suggestedInvitees || []).map(e => ({ email: norm(e) }));
-    const havePreselected = Array.isArray(state.preselectedCustomerEmails) && state.preselectedCustomerEmails.length > 0;
-    const selected = new Set();
-    const seed = havePreselected ? state.preselectedCustomerEmails : (state.suggestedInvitees || []);
-    seed.forEach(e => { if (isEmail(e)) selected.add(lower(e)); });
+    
+    // candidates shown in the list
+    let candidates = union.map(e => ({ email: e }));
+    
+    // everything in the union starts selected
+    const selected = new Set(union.map(lower));
 
     function renderInviteList() {
       inviteListEl.innerHTML = '';
@@ -947,6 +946,7 @@
     confirmModal.style.display = 'flex';
 
     confirmBtn.onclick = () => {
+      saveSuggestedInviteesDebounced.flush();
       if (selected.size === 0) { alert('Please add at least one attendee email.'); return; }
       if (state.confirmQuestion && state.confirmQuestion.required) {
         const chosen = document.querySelector('#confirmQuestionWrap input[name="cq"]:checked');
@@ -982,8 +982,12 @@
     }
     pendingIso = null; pendingPill = null;
   }
-  closeConfirm.onclick = () => closeConfirmModal(true);
-  confirmModal.addEventListener('click', (e) => { if (e.target === confirmModal) closeConfirmModal(true); });
+  
+  closeConfirm.onclick = () => {
+    saveSuggestedInviteesDebounced.flush();
+    closeConfirmModal(true);
+  };
+
 
   /**********************
    * Cart (multi-select)
