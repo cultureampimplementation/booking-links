@@ -908,7 +908,7 @@
 
 
     function validateConfirmEnabled() {
-      const hasEmails = selected.size > 0;
+      const hasEmails = confirmDraft.selected.size > 0;
       let okQuestion = true;
       if (state.confirmQuestion && state.confirmQuestion.required) {
         const k = state.confirmQuestion.key;
@@ -936,24 +936,6 @@
       newInviteInp.value = '';
       renderInviteList();
       validateConfirmEnabled();
-    }
-
-
-    function maybeLoadInviteesFallbackThenRender() {
-      if (candidates.length) { renderInviteList(); validateConfirmEnabled(); return; }
-      inviteListEl.innerHTML = '<p class="notice">Loading suggested attendees…</p>';
-      apiGet('getInvitees', { token })
-        .then(res => {
-          const emails = (res && Array.isArray(res.emails)) ? res.emails : [];
-          candidates = emails
-            .map(norm)
-            .filter(isEmail)
-            .filter((v, i, a) => a.findIndex(x => lower(x) === lower(v)) === i)
-            .map(e => ({ email: e }));
-          candidates.forEach(c => selected.add(lower(c.email)));
-          renderInviteList(); validateConfirmEnabled();
-        })
-        .catch(() => { candidates = []; renderInviteList(); validateConfirmEnabled(); });
     }
 
     function renderConfirmQuestion() {
