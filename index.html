@@ -659,14 +659,6 @@
     usedChip.textContent = 'USED';
     actions.appendChild(usedChip);
   
-    if (meta?.colleagueEmail) {
-      const btn = document.createElement('a');
-      btn.className = 'used-btn';
-      btn.href = `mailto:${encodeURIComponent(meta.colleagueEmail)}?subject=Reschedule%20my%20meeting`;
-      btn.textContent = 'Email your Culture Amp contact';
-      actions.appendChild(btn);
-    }
-  
     if (meta?.allowRebook) {
       const info = document.createElement('span');
       info.className = 'used-sub';
