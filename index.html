@@ -393,6 +393,20 @@
     confirmQuestion: null
   };
 
+  // Shared working state for the confirm modal, accessible to close/backdrop handlers
+  const confirmDraft = {
+    candidates: [],           // [{ email, _userAdded?, _preselected?, _suggested? }]
+    selected: new Set(),      // lowercased emails that are checked
+    dirty: false
+  };
+  
+  function collectInviteesForSave() {
+    return {
+      suggestedInvitees: confirmDraft.candidates.map(c => String(c.email).trim()),
+      preselectedCustomerEmails: Array.from(confirmDraft.selected).map(x => String(x).trim())
+    };
+  }
+
   let pendingWeekKey = null;
 
   const tzSel = document.getElementById('tz');
@@ -424,12 +438,13 @@
   const closeConfirm = document.getElementById('closeConfirm');
   const colleagueNameEl = document.getElementById('colleagueName');
 
+  // Backdrop click: save if dirty, then close
   confirmModal.addEventListener('click', async (e) => {
     if (e.target === confirmModal) {
-      if (modalDirty) {
+      if (confirmDraft.dirty) {
         const { suggestedInvitees, preselectedCustomerEmails } = collectInviteesForSave();
         await saveInviteesOnce({ suggestedInvitees, preselectedCustomerEmails, reason: 'dismiss' });
-        modalDirty = false;
+        confirmDraft.dirty = false;
       }
       closeConfirmModal(true);
     }
@@ -825,8 +840,8 @@
     const suggestedLC   = new Set(suggested.map(lower));
     const preselectedLC = new Set(preselected.map(lower));
     
-    // candidates = union of both lists, but tagged so we know their origin
-    let candidates = Array.from(new Set([...suggested, ...preselected]))
+    // Build candidate list + default selection, then seed the shared draft
+    confirmDraft.candidates = Array.from(new Set([...suggested, ...preselected]))
       .map(e => ({
         email: e,
         _userAdded: false,
@@ -834,56 +849,63 @@
         _suggested:  suggestedLC.has(lower(e))
       }));
     
-    // ✅ Only preselected emails are checked by default
-    const selected = new Set(preselected.map(lower));
-
-    let modalDirty = false;
-    
-    function collectInviteesForSave() {
-      return {
-        suggestedInvitees: candidates.map(c => String(c.email).trim()),
-        preselectedCustomerEmails: Array.from(selected).map(x => String(x).trim())
-      };
-    }
+    confirmDraft.selected = new Set(preselected.map(lower)); // only preselected are checked by default
+    confirmDraft.dirty = false;
 
     function renderInviteList() {
       inviteListEl.innerHTML = '';
-      if (!candidates.length) {
-        const p = document.createElement('p'); p.className = 'notice'; p.textContent = 'Add at least one attendee email to proceed.';
+      const items = confirmDraft.candidates;
+    
+      if (!items.length) {
+        const p = document.createElement('p');
+        p.className = 'notice';
+        p.textContent = 'Add at least one attendee email to proceed.';
         inviteListEl.appendChild(p);
-        validateConfirmEnabled(); return;
+        validateConfirmEnabled();
+        return;
       }
-      candidates.forEach((c, idx) => {
+    
+      items.forEach((c, idx) => {
         const row = document.createElement('label');
-        row.style.display = 'flex'; row.style.alignItems = 'center'; row.style.gap = '8px'; row.style.margin = '6px 0';
-
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.gap = '8px';
+        row.style.margin = '6px 0';
+    
         const cb = document.createElement('input');
-        cb.type = 'checkbox'; cb.checked = selected.has(lower(c.email));
+        cb.type = 'checkbox';
+        cb.checked = confirmDraft.selected.has(lower(c.email));
         cb.addEventListener('change', () => {
           const key = lower(c.email);
-          if (cb.checked) selected.add(key); else selected.delete(key);
-          modalDirty = true;
+          if (cb.checked) confirmDraft.selected.add(key);
+          else confirmDraft.selected.delete(key);
+          confirmDraft.dirty = true;
           validateConfirmEnabled();
         });
-
-
-        const span = document.createElement('span'); span.textContent = c.email;
-
-        const rm = document.createElement('button'); rm.type = 'button'; rm.textContent = 'Remove'; rm.className = 'link-btn'; rm.style.marginLeft = 'auto';
+    
+        const span = document.createElement('span');
+        span.textContent = c.email;
+    
+        const rm = document.createElement('button');
+        rm.type = 'button';
+        rm.textContent = 'Remove';
+        rm.className = 'link-btn';
+        rm.style.marginLeft = 'auto';
         rm.addEventListener('click', () => {
-          selected.delete(lower(c.email));
-          candidates.splice(idx, 1);
-          modalDirty = true;
+          confirmDraft.selected.delete(lower(c.email));
+          confirmDraft.candidates.splice(idx, 1);
+          confirmDraft.dirty = true;
           renderInviteList();
           validateConfirmEnabled();
         });
-
+    
         if (!c._userAdded) rm.style.display = 'none';
-
+    
         row.append(cb, span, rm);
         inviteListEl.appendChild(row);
       });
     }
+
 
     function validateConfirmEnabled() {
       const hasEmails = selected.size > 0;
@@ -1017,11 +1039,12 @@
     pendingIso = null; pendingPill = null;
   }
   
+  // Close (X) button: save if dirty, then close
   closeConfirm.onclick = async () => {
-    if (modalDirty) {
+    if (confirmDraft.dirty) {
       const { suggestedInvitees, preselectedCustomerEmails } = collectInviteesForSave();
       await saveInviteesOnce({ suggestedInvitees, preselectedCustomerEmails, reason: 'close' });
-      modalDirty = false;
+      confirmDraft.dirty = false;
     }
     closeConfirmModal(true);
   };
