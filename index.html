@@ -924,15 +924,20 @@
       const lc = lower(raw);
       if (!raw) return;
       if (!isEmail(raw)) { alert('Please enter a valid email address.'); return; }
-      if (candidates.some(c => lower(c.email) === lc)) { alert('That address is already listed.'); return; }
-        candidates.push({ email: raw, _userAdded: true });
-        if (candidates.length > 15) candidates = candidates.slice(-15);
-        selected.add(lc);
-        modalDirty = true;
-        newInviteInp.value = '';
-        renderInviteList();
-        validateConfirmEnabled();
+      if (confirmDraft.candidates.some(c => lower(c.email) === lc)) { alert('That address is already listed.'); return; }
+    
+      confirmDraft.candidates.push({ email: raw, _userAdded: true });
+      if (confirmDraft.candidates.length > 15) {
+        confirmDraft.candidates = confirmDraft.candidates.slice(-15);
       }
+      confirmDraft.selected.add(lc);
+      confirmDraft.dirty = true;
+    
+      newInviteInp.value = '';
+      renderInviteList();
+      validateConfirmEnabled();
+    }
+
 
     function maybeLoadInviteesFallbackThenRender() {
       if (candidates.length) { renderInviteList(); validateConfirmEnabled(); return; }
