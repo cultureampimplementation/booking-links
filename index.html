@@ -347,6 +347,15 @@
     return monthWeeks;
   }
 
+  async function saveInviteesOnce({ suggestedInvitees, preselectedCustomerEmails, reason }) {
+    try {
+      // single endpoint that writes both arrays into optionsJSON
+      await apiPost('saveInvitees', { token }, { suggestedInvitees, preselectedCustomerEmails, reason });
+    } catch (e) {
+      console.error('saveInvitees failed:', e);
+    }
+  }
+
 
 
   /**********************
@@ -358,13 +367,6 @@
     call.flush = () => { if (t){ clearTimeout(t); fn(...(lastArgs||[])); t=null; } };
     return call;
   }
-  const saveSuggestedInviteesDebounced = makeDebounce((emails)=> {
-    apiPost('saveSuggestedInvitees', { token }, { emails }).catch(console.error);
-  }, 400);
-
-  const saveCustomerEmailsDebounced = debounce((emails) => {
-    apiPost('saveCustomerEmails', { token }, { emails }).catch(console.error);
-  }, 400);
 
   const saveConfirmAnswerDebounced = debounce((key, value) => {
     if (!key) return;
@@ -422,12 +424,17 @@
   const closeConfirm = document.getElementById('closeConfirm');
   const colleagueNameEl = document.getElementById('colleagueName');
 
-  confirmModal.addEventListener('click', (e) => {
+  confirmModal.addEventListener('click', async (e) => {
     if (e.target === confirmModal) {
-      saveSuggestedInviteesDebounced.flush();
+      if (modalDirty) {
+        const { suggestedInvitees, preselectedCustomerEmails } = collectInviteesForSave();
+        await saveInviteesOnce({ suggestedInvitees, preselectedCustomerEmails, reason: 'dismiss' });
+        modalDirty = false;
+      }
       closeConfirmModal(true);
     }
   });
+
 
   let pendingIso = null;
   let pendingPill = null;
@@ -818,6 +825,15 @@
     // everything in the union starts selected
     const selected = new Set(union.map(lower));
 
+    let modalDirty = false;
+    
+    function collectInviteesForSave() {
+      return {
+        suggestedInvitees: candidates.map(c => String(c.email).trim()),
+        preselectedCustomerEmails: Array.from(selected).map(x => String(x).trim())
+      };
+    }
+
     function renderInviteList() {
       inviteListEl.innerHTML = '';
       if (!candidates.length) {
@@ -834,9 +850,10 @@
         cb.addEventListener('change', () => {
           const key = lower(c.email);
           if (cb.checked) selected.add(key); else selected.delete(key);
+          modalDirty = true;
           validateConfirmEnabled();
-          saveCustomerEmailsDebounced(Array.from(selected));
         });
+
 
         const span = document.createElement('span'); span.textContent = c.email;
 
@@ -844,11 +861,11 @@
         rm.addEventListener('click', () => {
           selected.delete(lower(c.email));
           candidates.splice(idx, 1);
+          modalDirty = true;
           renderInviteList();
           validateConfirmEnabled();
-          saveCustomerEmailsDebounced(Array.from(selected));
-          saveSuggestedInviteesDebounced(candidates.map(x => x.email));
         });
+
         if (!c._userAdded) rm.style.display = 'none';
 
         row.append(cb, span, rm);
@@ -874,15 +891,14 @@
       if (!raw) return;
       if (!isEmail(raw)) { alert('Please enter a valid email address.'); return; }
       if (candidates.some(c => lower(c.email) === lc)) { alert('That address is already listed.'); return; }
-      candidates.push({ email: raw, _userAdded: true });
-      if (candidates.length > 15) candidates = candidates.slice(-15);
-      selected.add(lc);
-      newInviteInp.value = '';
-      renderInviteList();
-      validateConfirmEnabled();
-      saveSuggestedInviteesDebounced(candidates.map(c => c.email));
-      saveCustomerEmailsDebounced(Array.from(selected));
-    }
+        candidates.push({ email: raw, _userAdded: true });
+        if (candidates.length > 15) candidates = candidates.slice(-15);
+        selected.add(lc);
+        modalDirty = true;
+        newInviteInp.value = '';
+        renderInviteList();
+        validateConfirmEnabled();
+      }
 
     function maybeLoadInviteesFallbackThenRender() {
       if (candidates.length) { renderInviteList(); validateConfirmEnabled(); return; }
@@ -946,17 +962,22 @@
 
     confirmModal.style.display = 'flex';
 
-    confirmBtn.onclick = () => {
-      saveSuggestedInviteesDebounced.flush();
+    confirmBtn.onclick = async () => {
       if (selected.size === 0) { alert('Please add at least one attendee email.'); return; }
       if (state.confirmQuestion && state.confirmQuestion.required) {
         const chosen = document.querySelector('#confirmQuestionWrap input[name="cq"]:checked');
         if (!chosen) { alert('Please answer the required question.'); return; }
       }
+    
       confirmBtn.disabled = true;
       confirmBtn.textContent = 'Booking…';
+    
       const explicitCustomerEmails = Array.from(selected);
-
+    
+      // Persist all invitee edits once (even if user made none, it's cheap & consistent)
+      const { suggestedInvitees, preselectedCustomerEmails } = collectInviteesForSave();
+      await saveInviteesOnce({ suggestedInvitees, preselectedCustomerEmails, reason: 'confirm' });
+    
       apiPost('reserveSlots', { token }, { slots: [iso], extra: { explicitCustomerEmails } })
         .then(() => {
           confirmBtn.classList.add('success');
@@ -984,10 +1005,15 @@
     pendingIso = null; pendingPill = null;
   }
   
-  closeConfirm.onclick = () => {
-    saveSuggestedInviteesDebounced.flush();
+  closeConfirm.onclick = async () => {
+    if (modalDirty) {
+      const { suggestedInvitees, preselectedCustomerEmails } = collectInviteesForSave();
+      await saveInviteesOnce({ suggestedInvitees, preselectedCustomerEmails, reason: 'close' });
+      modalDirty = false;
+    }
     closeConfirmModal(true);
   };
+
 
 
   /**********************
