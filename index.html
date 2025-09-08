@@ -356,8 +356,17 @@
     }
   }
 
+  // Put this near your other helpers (top of <script>)
+  const coerceCqs = (v) => {
+    if (!v) return [];
+    if (Array.isArray(v)) return v;
+    if (typeof v === 'string') {
+      try { const j = JSON.parse(v); return Array.isArray(j) ? j : []; } catch {}
+    }
+    return [];
+  };
 
-
+  
   /**********************
    * Debounced server writes
    **********************/
@@ -1011,21 +1020,34 @@
     confirmModal.style.display = 'flex';
 
     confirmBtn.onclick = async () => {
-      if (confirmDraft.selected.size === 0) { alert('Please add at least one attendee email.'); return; }
-      if (state.confirmQuestion && state.confirmQuestion.required) {
-        const chosen = document.querySelector('#confirmQuestionWrap input[name="cq"]:checked');
-        if (!chosen) { alert('Please answer the required question.'); return; }
+      if (confirmDraft.selected.size === 0) {
+        alert('Please add at least one attendee email.');
+        return;
       }
     
+      // Validate all required questions
+      const qs = state.confirmQuestions?.length
+        ? state.confirmQuestions
+        : (state.confirmQuestion ? [state.confirmQuestion] : []);
+      const allAnswered = (qs || []).every((q, idx) => {
+        if (!q || !q.required) return true;
+        const group = `cq_${(q.key || ('q'+idx))}`.replace(/\W+/g, '_');
+        const chosen = document.querySelector(`#confirmQuestionWrap input[name="${group}"]:checked`);
+        return !!(chosen && chosen.value);
+      });
+      if (!allAnswered) {
+        alert('Please answer the required question(s).');
+        return;
+      }
+    
+      // proceed with booking...
       confirmBtn.disabled = true;
       confirmBtn.textContent = 'Booking…';
     
-      // Persist all invitee edits once
       const { suggestedInvitees, preselectedCustomerEmails } = collectInviteesForSave();
       await saveInviteesOnce({ suggestedInvitees, preselectedCustomerEmails, reason: 'confirm' });
       confirmDraft.dirty = false;
     
-      // Keep in-memory state in sync for next time
       state.suggestedInvitees = suggestedInvitees.slice();
       state.preselectedCustomerEmails = preselectedCustomerEmails.slice();
     
@@ -1236,88 +1258,68 @@
   
     showLoading('Checking your link…');
   
-    // 1) Gate on invite status first
     apiGet('getInviteMeta', { token: t })
       .then(meta => {
         if (!meta?.ok) throw new Error(meta?.error || 'Meta fetch failed');
   
-        // quick UI bits
-        
-        // prefer first name, then initials, then email (last resort)
-        const displayName =
-          meta.colleagueFirstName ||
-          meta.colleagueEmail ||
-          '';
-        
+        // Who we're searching
+        const displayName = meta.colleagueFirstName || meta.colleagueEmail || '';
         if (colleagueNameEl) colleagueNameEl.textContent = displayName;
-
-        // prime invitee data early from meta (Option A)
+  
+        // Preload invitees
         if (Array.isArray(meta.suggestedInvitees)) {
           state.suggestedInvitees = meta.suggestedInvitees;
         }
         if (Array.isArray(meta.preselectedCustomerEmails)) {
           state.preselectedCustomerEmails = meta.preselectedCustomerEmails;
         }
-        if (meta.confirmQuestion) {
-          state.confirmQuestion = meta.confirmQuestion;
-        }
-
-        // Accept array OR JSON string from backend (meta + res)
-        const coerceCqs = (v) => {
-          if (!v) return [];
-          if (Array.isArray(v)) return v;
-          if (typeof v === 'string') { try { const j = JSON.parse(v); return Array.isArray(j) ? j : []; } catch {} }
-          return [];
-        };
-        
-        // from getInviteMeta
+  
+        // Confirm questions from META (array or JSON string), with legacy fallback
         if (meta.confirmQuestions || meta.confirmQuestionsJSON) {
           state.confirmQuestions = coerceCqs(meta.confirmQuestions || meta.confirmQuestionsJSON);
         }
         if (!state.confirmQuestions.length && meta.confirmQuestion) {
-          state.confirmQuestions = [meta.confirmQuestion]; // fallback
+          state.confirmQuestions = [meta.confirmQuestion]; // legacy single-question support
         }
-        
-        // from getWeekList
-        if (res.confirmQuestions || res.confirmQuestionsJSON) {
-          state.confirmQuestions = coerceCqs(res.confirmQuestions || res.confirmQuestionsJSON);
-        }
-        if (!state.confirmQuestions.length && res.confirmQuestion) {
-          state.confirmQuestions = [res.confirmQuestion]; // fallback
-        }
-
-
+  
         if (meta.initialTz) initialTz = meta.initialTz;
         if (typeof meta.maxHolds === 'number') MAX_SELECT = meta.maxHolds;
   
-        // gate: only NEW or explicitly allowed rebooks proceed
+        // Gate used links unless rebook allowed
         if (meta.status !== 'NEW' && !meta.allowRebook) {
           hideLoading();
           renderUsedState(meta);
-          // stop here
           return Promise.reject(new Error('used_link'));
         }
   
         showLoading('Loading weeks…');
-        // 2) Now fetch the week list & render as before
         return apiGet('getWeekList', { token: t, weeks: 24 });
       })
       .then(res => {
-        // safety: gate here too if backend also returns status
+        // Safety gate from RES too
         if (res?.status && res.status !== 'NEW' && !res.allowRebook) {
           hideLoading();
           return renderUsedState(res);
         }
   
-        // your existing success path
+        // Timezones
         if (Array.isArray(res.timezones)) timezones = res.timezones;
         if (res.initialTz) initialTz = res.initialTz;
         populateTzSelect(timezones, initialTz);
   
+        // Other options
         MAX_SELECT = Number(res.maxHolds || MAX_SELECT || 1);
-        state.suggestedInvitees = Array.isArray(res.suggestedInvitees) ? res.suggestedInvitees : [];
-        state.preselectedCustomerEmails = Array.isArray(res.preselectedCustomerEmails) ? res.preselectedCustomerEmails : [];
-        state.confirmQuestion = res.confirmQuestion || null;
+        state.suggestedInvitees = Array.isArray(res.suggestedInvitees) ? res.suggestedInvitees : state.suggestedInvitees;
+        state.preselectedCustomerEmails = Array.isArray(res.preselectedCustomerEmails) ? res.preselectedCustomerEmails : state.preselectedCustomerEmails;
+  
+        // If META didn’t provide questions, take them from RES (array or JSON string), with legacy fallback
+        if (!state.confirmQuestions.length) {
+          if (res.confirmQuestions || res.confirmQuestionsJSON) {
+            state.confirmQuestions = coerceCqs(res.confirmQuestions || res.confirmQuestionsJSON);
+          } else if (res.confirmQuestion) {
+            state.confirmQuestions = [res.confirmQuestion];
+          }
+        }
   
         state.monthWeeks = buildMonthWeeksFromWeekList(res.weeks || []);
         renderOverview();
@@ -1329,6 +1331,7 @@
       })
       .finally(hideLoading);
   }
+
 
 
   // Kick things off:
