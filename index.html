@@ -814,16 +814,28 @@
     const lower = s => norm(s).toLowerCase();
     const isEmail = s => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(norm(s));
 
-    const union = Array.from(new Set([
-      ...(state.suggestedInvitees || []),
-      ...(state.preselectedCustomerEmails || [])
-    ].map(norm))).filter(isEmail);
+    const suggested = (state.suggestedInvitees || [])
+      .map(norm)
+      .filter(isEmail);
     
-    // candidates shown in the list
-    let candidates = union.map(e => ({ email: e }));
+    const preselected = (state.preselectedCustomerEmails || [])
+      .map(norm)
+      .filter(isEmail);
     
-    // everything in the union starts selected
-    const selected = new Set(union.map(lower));
+    const suggestedLC   = new Set(suggested.map(lower));
+    const preselectedLC = new Set(preselected.map(lower));
+    
+    // candidates = union of both lists, but tagged so we know their origin
+    let candidates = Array.from(new Set([...suggested, ...preselected]))
+      .map(e => ({
+        email: e,
+        _userAdded: false,
+        _preselected: preselectedLC.has(lower(e)),
+        _suggested:  suggestedLC.has(lower(e))
+      }));
+    
+    // ✅ Only preselected emails are checked by default
+    const selected = new Set(preselected.map(lower));
 
     let modalDirty = false;
     
