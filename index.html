@@ -390,7 +390,8 @@
     cart: [],
     suggestedInvitees: [],
     preselectedCustomerEmails: [],
-    confirmQuestion: null
+    confirmQuestion: null,
+    confirmQuestions: []    
   };
 
   // Shared working state for the confirm modal, accessible to close/backdrop handlers
@@ -906,16 +907,20 @@
       });
     }
 
-
     function validateConfirmEnabled() {
       const hasEmails = confirmDraft.selected.size > 0;
-      let okQuestion = true;
-      if (state.confirmQuestion && state.confirmQuestion.required) {
-        const k = state.confirmQuestion.key;
-        const chosen = qWrap.querySelector('input[name="cq"]:checked');
-        okQuestion = !!chosen && norm(chosen.value);
-        if (okQuestion) saveConfirmAnswerDebounced(k, chosen.value);
-      }
+    
+      const qs = state.confirmQuestions?.length
+        ? state.confirmQuestions
+        : (state.confirmQuestion ? [state.confirmQuestion] : []);
+    
+      const okQuestion = (qs || []).every(q => {
+        if (!q || !q.required) return true;
+        const group = `cq_${q.key || ''}`.replace(/\W+/g,'_');
+        const chosen = qWrap.querySelector(`input[name="${group}"]:checked`);
+        return !!(chosen && chosen.value);
+      });
+    
       confirmBtn.disabled = !(hasEmails && okQuestion);
     }
 
@@ -938,24 +943,46 @@
       validateConfirmEnabled();
     }
 
-    function renderConfirmQuestion() {
-      const cq = state.confirmQuestion;
+    function renderConfirmQuestions() {
+      const qs = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length
+        ? state.confirmQuestions
+        : (state.confirmQuestion ? [state.confirmQuestion] : []);
+    
       qWrap.innerHTML = '';
-      if (!cq || !cq.label) { qWrap.classList.add('hide'); return; }
+      if (!qs.length) { qWrap.classList.add('hide'); return; }
       qWrap.classList.remove('hide'); qWrap.classList.add('notice');
-      const title = document.createElement('div'); title.className = 'cq-title'; title.textContent = cq.label + (cq.required ? ' *' : ''); qWrap.appendChild(title);
-      const options = parseOptionsLoose(cq.options).map(cleanLabel);
-      const saved = cq.saved != null ? cleanLabel(cq.saved) : null;
-
-      options.forEach(optRaw => {
-        const opt = cleanLabel(optRaw);
-        const id = 'cq_' + opt.replace(/\W+/g, '_');
-        const row = document.createElement('div'); row.className = 'cq-row';
-        const rb = document.createElement('input'); rb.type = 'radio'; rb.name = 'cq'; rb.id = id; rb.value = opt;
-        if (saved && saved === opt) rb.checked = true;
-        rb.addEventListener('change', () => { saveConfirmAnswerDebounced(cq.key, opt); validateConfirmEnabled(); });
-        const lab = document.createElement('label'); lab.setAttribute('for', id); lab.textContent = opt;
-        row.append(rb, lab); qWrap.appendChild(row);
+    
+      qs.forEach((cq, idx) => {
+        const title = document.createElement('div');
+        title.className = 'cq-title';
+        title.textContent = (cq.label || 'Question') + (cq.required ? ' *' : '');
+        qWrap.appendChild(title);
+    
+        const opts = parseOptionsLoose(cq.options).map(cleanLabel);
+        const saved = cq.saved != null ? cleanLabel(cq.saved) : null;
+    
+        opts.forEach(optRaw => {
+          const opt = cleanLabel(optRaw);
+          const id = `cq_${cq.key || ('q'+idx)}_${opt.replace(/\W+/g, '_')}`;
+    
+          const row = document.createElement('div'); row.className = 'cq-row';
+          const rb  = document.createElement('input');
+          rb.type = 'radio';
+          rb.name = `cq_${cq.key || ('q'+idx)}`;   // group by key
+          rb.id = id;
+          rb.value = opt;
+    
+          if (saved && saved === opt) rb.checked = true;
+    
+          rb.addEventListener('change', () => {
+            const k = String(cq.key || ('q'+idx));
+            saveConfirmAnswerDebounced(k, opt);
+            validateConfirmEnabled();
+          });
+    
+          const lab = document.createElement('label'); lab.setAttribute('for', id); lab.textContent = opt;
+          row.append(rb, lab); qWrap.appendChild(row);
+        });
       });
     }
 
@@ -965,7 +992,7 @@
     const timeStr = (s, e) => new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(s).replace(':', 'h') + '–' + new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(e).replace(':', 'h');
 
     confirmWhen.textContent = ''; // set below when slot passed
-    renderConfirmQuestion();
+    renderConfirmQuestions();
     renderInviteList();     
     validateConfirmEnabled();
     confirmWhen.textContent = `${dateStr(slot.start)} • ${timeStr(slot.start, slot.end)}`;
@@ -984,7 +1011,7 @@
     confirmModal.style.display = 'flex';
 
     confirmBtn.onclick = async () => {
-      if (selected.size === 0) { alert('Please add at least one attendee email.'); return; }
+      if (confirmDraft.selected.size === 0) { alert('Please add at least one attendee email.'); return; }
       if (state.confirmQuestion && state.confirmQuestion.required) {
         const chosen = document.querySelector('#confirmQuestionWrap input[name="cq"]:checked');
         if (!chosen) { alert('Please answer the required question.'); return; }
@@ -993,11 +1020,16 @@
       confirmBtn.disabled = true;
       confirmBtn.textContent = 'Booking…';
     
-      const explicitCustomerEmails = Array.from(selected);
-    
-      // Persist all invitee edits once (even if user made none, it's cheap & consistent)
+      // Persist all invitee edits once
       const { suggestedInvitees, preselectedCustomerEmails } = collectInviteesForSave();
       await saveInviteesOnce({ suggestedInvitees, preselectedCustomerEmails, reason: 'confirm' });
+      confirmDraft.dirty = false;
+    
+      // Keep in-memory state in sync for next time
+      state.suggestedInvitees = suggestedInvitees.slice();
+      state.preselectedCustomerEmails = preselectedCustomerEmails.slice();
+    
+      const explicitCustomerEmails = Array.from(confirmDraft.selected);
     
       apiPost('reserveSlots', { token }, { slots: [iso], extra: { explicitCustomerEmails } })
         .then(() => {
@@ -1228,6 +1260,30 @@
         }
         if (meta.confirmQuestion) {
           state.confirmQuestion = meta.confirmQuestion;
+        }
+
+        // Accept array OR JSON string from backend (meta + res)
+        const coerceCqs = (v) => {
+          if (!v) return [];
+          if (Array.isArray(v)) return v;
+          if (typeof v === 'string') { try { const j = JSON.parse(v); return Array.isArray(j) ? j : []; } catch {} }
+          return [];
+        };
+        
+        // from getInviteMeta
+        if (meta.confirmQuestions || meta.confirmQuestionsJSON) {
+          state.confirmQuestions = coerceCqs(meta.confirmQuestions || meta.confirmQuestionsJSON);
+        }
+        if (!state.confirmQuestions.length && meta.confirmQuestion) {
+          state.confirmQuestions = [meta.confirmQuestion]; // fallback
+        }
+        
+        // from getWeekList
+        if (res.confirmQuestions || res.confirmQuestionsJSON) {
+          state.confirmQuestions = coerceCqs(res.confirmQuestions || res.confirmQuestionsJSON);
+        }
+        if (!state.confirmQuestions.length && res.confirmQuestion) {
+          state.confirmQuestions = [res.confirmQuestion]; // fallback
         }
 
 
