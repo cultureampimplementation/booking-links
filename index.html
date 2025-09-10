@@ -258,6 +258,7 @@
       </header>
       <div class="content">
         <p id="confirmWhen" class="notice"></p>
+        <p id="confirmPrep" class="notice" style="display:none"></p>
         <div id="inviteList"></div>
         <button class="link-btn" id="addInviteBtn">+ Add another</button>
         <input type="email" id="newInviteInput" class="hide" placeholder="Enter email" />
@@ -476,7 +477,19 @@
   function todayKey(tz) { return ymdKey(new Date(), tz); }
   function isoWeekNumberFromKey(dayKey) { const d = new Date(dayKey + 'T00:00:00Z'); const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - day); const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1)); return Math.ceil((((d - yearStart) / 86400000) + 1) / 7); }
   function weekDaysFromMondayKey(monKey) { return Array.from({ length: 7 }, (_, i) => plusDaysKey(monKey, i)); }
-  function parseSlots(raw) { return (raw || []).map(s => ({ start: new Date(s.start), end: new Date(s.end) })).filter(s => !isNaN(s.start) && !isNaN(s.end)); }
+  function parseSlots(raw) {
+    return (raw || [])
+      .map(s => ({
+        start: new Date(s.start),
+        end:   new Date(s.end),
+        // keep the server’s chosen prep block (if any)
+        prep:  (s.prep && s.prep.start && s.prep.end)
+          ? { start: new Date(s.prep.start), end: new Date(s.prep.end) }
+          : null
+      }))
+      .filter(s => !isNaN(s.start) && !isNaN(s.end));
+  }
+
   function makeQuantileBuckets(counts) { const arr = counts.filter(n => Number.isFinite(n)).slice().sort((a, b) => a - b); if (!arr.length) return [0, 0, 0, 0, 0]; const q = p => arr[Math.min(arr.length - 1, Math.floor(p * (arr.length - 1)))]; return [q(0.2), q(0.4), q(0.6), q(0.8), arr[arr.length - 1]]; }
   function heatLevel(count, breaks) { if (count <= 0) return 0; const [q1, q2, q3, q4, _max] = breaks; if (count <= q1) return 1; if (count <= q2) return 2; if (count <= q3) return 3; if (count <= q4) return 4; return 5; }
   function weekLabel(monKey) { const d = new Date(monKey + 'T00:00:00Z'); const mon = d.toLocaleString('en-GB', { month: 'short' }); return `Week of ${mon} ${d.getUTCDate()}${ordinal(d.getUTCDate())} — Wk ${isoWeekNumberFromKey(monKey)}`; }
@@ -997,6 +1010,18 @@
     renderInviteList();     
     validateConfirmEnabled();
     confirmWhen.textContent = `${dateStr(slot.start)} • ${timeStr(slot.start, slot.end)}`;
+
+    const confirmPrepEl = document.getElementById('confirmPrep');
+    confirmPrepEl.style.display = 'none';
+    confirmPrepEl.textContent = '';
+    
+    if (slot && slot.prep && slot.prep.start && slot.prep.end) {
+      const ps = slot.prep.start, pe = slot.prep.end;      // Dates (from parseSlots)
+      const sameDay = ymdKey(ps, state.tz) === ymdKey(slot.start, state.tz);
+      const label = (sameDay ? '' : (dateStr(ps) + ' • ')) + timeStr(ps, pe);
+      confirmPrepEl.textContent = `Includes prep: ${label}`;
+      confirmPrepEl.style.display = '';
+    }
 
     addInviteBtn.onclick = () => {
       newInviteInp.classList.toggle('hide');
