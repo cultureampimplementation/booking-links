@@ -1069,8 +1069,13 @@
       state.preselectedCustomerEmails = preselectedCustomerEmails.slice();
     
       const explicitCustomerEmails = Array.from(confirmDraft.selected);
+
+      const preferredPrep =
+      (slot && slot.prep)
+        ? { start: slot.prep.start.toISOString(), end: slot.prep.end.toISOString() }
+        : undefined;
     
-      apiPost('reserveSlots', { token }, { slots: [iso], extra: { explicitCustomerEmails } })
+      apiPost('reserveSlots', { token }, { slots: [iso], extra: { explicitCustomerEmails, preferredPrep } })
         .then(() => {
           confirmBtn.classList.add('success');
           confirmBtn.textContent = 'Booked!';
