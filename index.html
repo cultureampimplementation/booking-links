@@ -1184,9 +1184,15 @@
 
   async function fetchWeekAtGranularity(mondayKey, g) {
     const res = await apiGet('fetchWeek', { token, mondayKey, g });
+    console.log('[fetchWeek raw]', res);
+    // show an example of a slot with prep (if present)
+    const withPrep = (res?.slots || []).find(s => s.prep);
+    if (withPrep) console.log('[example prep]', withPrep.prep);
     const parsed = parseSlots(res && res.slots ? res.slots : []);
+    console.log('[fetchWeek parsed first]', parsed[0]);
     return { parsed, count: parsed.length, g };
   }
+
   
   async function loadWeekCoarseToFine(mondayKey, { prefetch=false } = {}) {
     // UI cue (only when visible)
