@@ -1030,7 +1030,6 @@
     newInviteInp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addNewInviteFromInput(); } };
     newInviteInp.onblur = () => { if (String(newInviteInp.value || '').trim()) addNewInviteFromInput(); };
 
-    confirmBtn.disabled = true;
     confirmBtn.textContent = 'Confirm';
     confirmBtn.classList.remove('success', 'error');
 
