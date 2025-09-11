@@ -239,6 +239,9 @@
       </div>
       <div class="banner" id="s2Note"></div>
       <div id="s2Questions" class="notice" style="margin-top:12px;"></div>
+      <footer style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+        <button class="btn" id="s2DoneBtn" disabled>Done</button>
+      </footer>
     </div>
   </div>
 
@@ -543,7 +546,11 @@
       }).format(d).replace(':','h');
     }
     function fmtRangeLocal(s, e, tz) { return `${fmtTimeLocal(s, tz)}–${fmtTimeLocal(e, tz)}`; }
-
+ 
+    // track what was booked (handy if you reference later)
+    state.stage = 'overview';
+    state.lastBooked = null;   // {start: Date, end: Date}
+    state.lastPrep   = null;   // {start: Date, end: Date} | null
 
   /**********************
    * View toggles + loading UI
@@ -864,6 +871,8 @@
     const addInviteBtn = document.getElementById('addInviteBtn');
     const newInviteInp = document.getElementById('newInviteInput');
     const qWrap = document.getElementById('confirmQuestionWrap');
+    qWrap.innerHTML = '';
+    qWrap.classList.add('hide');
 
     const norm = s => String(s || '').trim();
     const lower = s => norm(s).toLowerCase();
@@ -948,19 +957,7 @@
 
     function validateConfirmEnabled() {
       const hasEmails = confirmDraft.selected.size > 0;
-    
-      const qs = state.confirmQuestions?.length
-        ? state.confirmQuestions
-        : (state.confirmQuestion ? [state.confirmQuestion] : []);
-    
-      const okQuestion = (qs || []).every(q => {
-        if (!q || !q.required) return true;
-        const group = `cq_${q.key || ''}`.replace(/\W+/g,'_');
-        const chosen = qWrap.querySelector(`input[name="${group}"]:checked`);
-        return !!(chosen && chosen.value);
-      });
-    
-      confirmBtn.disabled = !(hasEmails && okQuestion);
+      confirmBtn.disabled = !hasEmails;
     }
 
     function addNewInviteFromInput() {
@@ -982,98 +979,12 @@
       validateConfirmEnabled();
     }
 
-    function renderConfirmQuestions(slot) {
-      const prep = slot?.prep || null;
-    
-      const fmtDate = d => new Intl.DateTimeFormat('en-GB', {
-        timeZone: state.tz, weekday:'short', year:'numeric', month:'short', day:'numeric'
-      }).format(d);
-    
-      const fmtTime = d => new Intl.DateTimeFormat('en-GB', {
-        timeZone: state.tz, hour:'2-digit', minute:'2-digit', hour12:false
-      }).format(d).replace(':','h');
-    
-      const timeRange = (s, e) => `${fmtTime(s)}–${fmtTime(e)}`;
-    
-      const prepDurationMins =
-        prep ? Math.round((prep.end - prep.start)/60000)
-             : (state.meta?.options?.prepDurationMins ?? '');
-    
-      const prepSameDay =
-        prep ? (ymdKey(prep.start, state.tz) === ymdKey(slot.start, state.tz)) : false;
-    
-      const ctx = {
-        // existing context you might already use
-        colleagueName: state.meta?.colleagueFirstName || state.meta?.colleagueEmail || '',
-        colleagueFirstName: state.meta?.colleagueFirstName || '',
-        colleagueEmail: state.meta?.colleagueEmail || '',
-        customerName: state.meta?.customerName || '',
-        meetingType: state.meta?.meetingType || '',
-        meetingDate: slot ? fmtDate(slot.start) : '',
-        meetingTime: slot ? timeRange(slot.start, slot.end) : '',
-        tz: state.tz,
-    
-        // NEW: prep-specific tokens
-        prepDate: prep ? fmtDate(prep.start) : '',
-        prepTime: prep ? timeRange(prep.start, prep.end) : '',
-        prepDurationMins: prepDurationMins,
-        prepSameDay: prepSameDay ? 'yes' : 'no',
-        prepDayName: prep ? new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, weekday:'long' }).format(prep.start) : '',
-      };
-    
-      const qs = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length
-        ? state.confirmQuestions
-        : (state.confirmQuestion ? [state.confirmQuestion] : []);
-    
-      const qWrap = document.getElementById('confirmQuestionWrap');
-      qWrap.innerHTML = '';
-      if (!qs.length) { qWrap.classList.add('hide'); return; }
-      qWrap.classList.remove('hide'); qWrap.classList.add('notice');
-    
-      qs.forEach((cq, idx) => {
-        const title = document.createElement('div');
-        title.className = 'cq-title';
-        title.textContent = interp(cq.label || 'Question', ctx) + (cq.required ? ' *' : '');
-        qWrap.appendChild(title);
-    
-        const opts = parseOptionsLoose(cq.options).map(cleanLabel);
-        const saved = cq.saved != null ? cleanLabel(cq.saved) : null;
-    
-        opts.forEach(optRaw => {
-          const rendered = interp(cleanLabel(optRaw), ctx);   // ← prep-aware text
-          const id = `cq_${cq.key || ('q'+idx)}_${rendered.replace(/\W+/g,'_')}`;
-    
-          const row = document.createElement('div'); row.className = 'cq-row';
-          const rb = document.createElement('input');
-          rb.type = 'radio';
-          rb.name = `cq_${cq.key || ('q'+idx)}`;
-          rb.id = id;
-          rb.value = rendered;
-          if (saved && saved === rendered) rb.checked = true;
-          rb.addEventListener('change', () => {
-            const k = String(cq.key || ('q'+idx));
-            saveConfirmAnswerDebounced(k, rendered);
-            validateConfirmEnabled();
-          });
-    
-          const lab = document.createElement('label');
-          lab.setAttribute('for', id);
-          lab.textContent = rendered;
-    
-          row.append(rb, lab);
-          qWrap.appendChild(row);
-        });
-      });
-    }
-
-
     const fmtDate = new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
     const fmtTime = new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, hour: '2-digit', minute: '2-digit', hour12: false });
     const dateStr = s => new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }).format(s);
     const timeStr = (s, e) => new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(s).replace(':', 'h') + '–' + new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(e).replace(':', 'h');
 
     confirmWhen.textContent = ''; // set below when slot passed
-    renderConfirmQuestions(slot);
     renderInviteList();     
     validateConfirmEnabled();
     confirmWhen.textContent = `${dateStr(slot.start)} • ${timeStr(slot.start, slot.end)}`;
@@ -1194,19 +1105,16 @@
   };
 
   function renderStep2FromSlot(slot) {
-    // store for later screens (optional)
     state.lastBooked = slot ? { start: slot.start, end: slot.end } : null;
     state.lastPrep   = (slot && slot.prep) ? { start: slot.prep.start, end: slot.prep.end } : null;
     state.stage = 'postBook';
   
-    // hide week/overview, show step2
     document.getElementById('overviewView')?.classList.add('hide');
     document.getElementById('weekView')?.classList.add('hide');
     document.getElementById('step2')?.classList.remove('hide');
   
     const s2Colleague = document.getElementById('s2Colleague');
     const s2Note = document.getElementById('s2Note');
-  
     const colleagueName =
       state?.meta?.colleagueFirstName ||
       state?.meta?.colleagueEmail ||
@@ -1214,7 +1122,6 @@
   
     if (s2Colleague) s2Colleague.textContent = colleagueName;
   
-    // Banner copy
     if (slot && slot.prep && slot.prep.start && slot.prep.end) {
       const ps = slot.prep.start, pe = slot.prep.end;
       s2Note.textContent =
@@ -1223,10 +1130,116 @@
       s2Note.textContent = 'Please share a bit of context to help us prepare for your session.';
     }
   
-    // For now we won’t render questions here—keeping them in the modal until the next step.
-    // s2Questions stays empty for now.
+    renderStep2Questions(slot);
+  
+    const doneBtn = document.getElementById('s2DoneBtn');
+    doneBtn.onclick = () => {
+      doneBtn.classList.add('success');
+      doneBtn.textContent = 'Saved ✓';
+      // (optional) navigate somewhere, or keep the page as a receipt
+    };
   }
 
+
+  function renderStep2Questions(slot) {
+    const container = document.getElementById('s2Questions');
+    const doneBtn   = document.getElementById('s2DoneBtn');
+    container.innerHTML = '';
+  
+    const prep = slot?.prep || null;
+  
+    const ctx = {
+      colleagueName:     state.meta?.colleagueFirstName || state.meta?.colleagueEmail || '',
+      colleagueFirstName:state.meta?.colleagueFirstName || '',
+      colleagueEmail:    state.meta?.colleagueEmail || '',
+      customerName:      state.meta?.customerName || '',
+      meetingType:       state.meta?.meetingType || '',
+      meetingDate:       slot ? fmtDateLocal(slot.start, state.tz) : '',
+      meetingTime:       slot ? fmtRangeLocal(slot.start, slot.end, state.tz) : '',
+      tz:                state.tz,
+  
+      // prep specifics
+      prepDate:          prep ? fmtDateLocal(prep.start, state.tz) : '',
+      prepTime:          prep ? fmtRangeLocal(prep.start, prep.end, state.tz) : '',
+      prepDurationMins:  prep ? Math.round((prep.end - prep.start)/60000)
+                              : (state.meta?.options?.prepDurationMins ?? ''),
+      prepSameDay:       prep ? (ymdKey(prep.start, state.tz) === ymdKey(slot.start, state.tz) ? 'yes' : 'no') : '',
+      prepDayName:       prep ? new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, weekday:'long' }).format(prep.start) : ''
+    };
+  
+    const qs = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length
+      ? state.confirmQuestions
+      : (state.confirmQuestion ? [state.confirmQuestion] : []);
+  
+    if (!qs.length) {
+      container.innerHTML = '<div class="notice">No extra input needed.</div>';
+      doneBtn.disabled = false;
+      return;
+    }
+  
+    // Build the UI
+    qs.forEach((cq, idx) => {
+      const block = document.createElement('div');
+      block.style.margin = '12px 0';
+  
+      const title = document.createElement('div');
+      title.className = 'cq-title';
+      title.textContent = interp(cq.label || 'Question', ctx) + (cq.required ? ' *' : '');
+      block.appendChild(title);
+  
+      const opts = parseOptionsLoose(cq.options).map(cleanLabel);
+      const saved = cq.saved != null ? cleanLabel(cq.saved) : null;
+  
+      opts.forEach(optRaw => {
+        const rendered = interp(cleanLabel(optRaw), ctx);
+        const id = `s2_${cq.key || ('q'+idx)}_${rendered.replace(/\W+/g,'_')}`;
+  
+        const row = document.createElement('div');
+        row.className = 'cq-row';
+  
+        const rb = document.createElement('input');
+        rb.type = 'radio';
+        rb.name = `s2_${cq.key || ('q'+idx)}`;
+        rb.id = id;
+        rb.value = rendered;
+        if (saved && saved === rendered) rb.checked = true;
+        rb.addEventListener('change', () => {
+          const k = String(cq.key || ('q'+idx));
+          saveConfirmAnswerDebounced(k, rendered);
+          validateStep2Complete();
+        });
+  
+        const lab = document.createElement('label');
+        lab.setAttribute('for', id);
+        lab.textContent = rendered;
+  
+        row.append(rb, lab);
+        block.appendChild(row);
+      });
+  
+      container.appendChild(block);
+    });
+  
+    // initial validation
+    validateStep2Complete();
+  }
+  
+  function validateStep2Complete() {
+    const doneBtn = document.getElementById('s2DoneBtn');
+    const qs = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length
+      ? state.confirmQuestions
+      : (state.confirmQuestion ? [state.confirmQuestion] : []);
+  
+    // All required need a checked value
+    const ok = (qs || []).every((q, idx) => {
+      if (!q || !q.required) return true;
+      const group = `s2_${(q.key || ('q'+idx))}`.replace(/\W+/g,'_');
+      const chosen = document.querySelector(`#s2Questions input[name="${group}"]:checked`);
+      return !!(chosen && chosen.value);
+    });
+  
+    doneBtn.disabled = !ok;
+  }
 
 
   /**********************
