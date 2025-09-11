@@ -1442,9 +1442,12 @@
   
         // Names in header/step 2/landing
         const displayName = meta.colleagueFirstName || meta.colleagueEmail || '';
-        colleagueNameEl?.textContent = displayName;
-        document.getElementById('s2Colleague')?.textContent = displayName;
-        document.getElementById('landingColleague')?.textContent = displayName;
+        if (colleagueNameEl) colleagueNameEl.textContent = displayName;
+        const s2ColleagueEl = document.getElementById('s2Colleague');
+        if (s2ColleagueEl) s2ColleagueEl.textContent = displayName;
+        const landingColleagueEl = document.getElementById('landingColleague');
+        if (landingColleagueEl) landingColleagueEl.textContent = displayName;
+
   
         // Show LANDING immediately (instead of Overview)
         showOnly('landing');
