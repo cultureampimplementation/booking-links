@@ -237,15 +237,16 @@
       </div>
   
       <div class="landing-steps">
-        <div class="step-card">
+        <div class="step-card" id="step1Card">
           <h3>Step 1</h3>
           <p>Pick a time that works for you.</p>
         </div>
-        <div class="step-card">
+        <div class="step-card" id="step2Card">
           <h3>Step 2</h3>
           <p>Share a couple of quick details so we can prepare.</p>
         </div>
       </div>
+
     </div>
   </div>
 
@@ -799,6 +800,7 @@
     } else {
       document.body.prepend(wrap);
     }
+    refreshLandingCards({ metaOverride: meta });
   }
 
   /**********************
@@ -1136,6 +1138,7 @@
           confirmBtn.classList.add('success');
           confirmBtn.textContent = 'Booked!';
           renderStep2FromSlot(slot);
+          refreshLandingCards();
           setTimeout(() => {
             confirmModal.style.display = 'none';
             pendingIso = null; pendingPill = null;
@@ -1496,6 +1499,7 @@
   
         // Show LANDING immediately (instead of Overview)
         showOnly('landing');
+        refreshLandingCards();
         
         // Make the step cards act like big buttons
         document.querySelectorAll('#landingView .step-card').forEach(card => {
@@ -1573,6 +1577,88 @@
           alert((err && err.message) || 'Failed to initialize.');
         }
       });
+  }
+
+  function refreshLandingCards({ metaOverride } = {}) {
+    const s1 = document.getElementById('step1Card');
+    const s2 = document.getElementById('step2Card');
+    if (!s1 || !s2) return;
+  
+    // Source of truth for what's booked:
+    //  - If we just booked in-session → state.lastBooked / state.lastPrep
+    //  - If we’re loading a USED link → metaOverride (from renderUsedState) or state.meta
+    const meta = metaOverride || state.meta || {};
+    const slot = state.lastBooked || (meta.bookedStartISO ? { 
+      start: new Date(meta.bookedStartISO), 
+      end:   meta.bookedEndISO ? new Date(meta.bookedEndISO) : null 
+    } : null);
+  
+    const withPrep =
+      // if we just booked and the slot has prep, that wins
+      !!state.lastPrep ||
+      // otherwise infer from meta/options (meeting types that require prep)
+      (!!(meta?.options?.prepDurationMins > 0) || !!(state?.meta?.options?.prepDurationMins > 0));
+  
+    // If we *know* the prep block start/end, use them (fresh booking path)
+    const prep = state.lastPrep || (meta.prepStartISO && meta.prepEndISO ? {
+      start: new Date(meta.prepStartISO),
+      end:   new Date(meta.prepEndISO)
+    } : null);
+  
+    const colleagueName =
+      state?.meta?.colleagueFirstName ||
+      state?.meta?.colleagueEmail ||
+      meta?.colleagueFirstName ||
+      meta?.colleagueEmail ||
+      'your People Scientist';
+  
+    const colleagueEmail =
+      state?.meta?.colleagueEmail || meta?.colleagueEmail || '';
+  
+    // Default (not booked yet)
+    if (!slot || isNaN(+slot.start)) {
+      s1.innerHTML = `
+        <h3>Step 1</h3>
+        <p>Pick a time that works for you.</p>
+      `;
+      s2.innerHTML = `
+        <h3>Step 2</h3>
+        <p>Share a couple of quick details so we can prepare.</p>
+      `;
+      return;
+    }
+  
+    // Formats
+    const whenDate = fmtDateLocal(slot.start, state.tz);
+    const whenTime = fmtRangeLocal(slot.start, slot.end || new Date(slot.start.getTime() + 30*60000), state.tz);
+  
+    // STEP 1 — booked look
+    s1.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="font-size:22px;font-weight:800;">📅 Booked! for</div>
+        <div style="font-size:18px;font-weight:800;">${whenDate} ${whenTime}</div>
+        ${colleagueEmail ? `
+          <div style="margin-top:6px;">Contact <a href="mailto:${encodeURIComponent(colleagueEmail)}">${colleagueEmail}</a> directly if you can't see this in your calendar.</div>
+        ` : ''}
+        <div style="margin-top:4px;font-size:13px;color:#555;">Need to reschedule? browse for another time.</div>
+      </div>
+    `;
+  
+    // STEP 2 — copy differs if there’s a prep block
+    if (withPrep) {
+      const prepLine = prep
+        ? `${colleagueName} is holding time at ${fmtRangeLocal(prep.start, prep.end, state.tz)} on ${fmtDateLocal(prep.start, state.tz)} to prepare for this session. Please share your input ahead of this time.`
+        : `Please share a couple of quick details so ${colleagueName} can prepare.`;
+      s2.innerHTML = `
+        <h3>Step 2: Share your input for ${colleagueName}’s prep</h3>
+        <p>${prepLine}</p>
+      `;
+    } else {
+      s2.innerHTML = `
+        <h3>Step 2: Share your questions, for ${colleagueName}’s prep</h3>
+        <p>Tell us what would be most helpful to cover in the session.</p>
+      `;
+    }
   }
 
 
