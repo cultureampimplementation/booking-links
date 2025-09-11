@@ -957,11 +957,50 @@
       validateConfirmEnabled();
     }
 
-    function renderConfirmQuestions() {
+    function renderConfirmQuestions(slot) {
+      const prep = slot?.prep || null;
+    
+      const fmtDate = d => new Intl.DateTimeFormat('en-GB', {
+        timeZone: state.tz, weekday:'short', year:'numeric', month:'short', day:'numeric'
+      }).format(d);
+    
+      const fmtTime = d => new Intl.DateTimeFormat('en-GB', {
+        timeZone: state.tz, hour:'2-digit', minute:'2-digit', hour12:false
+      }).format(d).replace(':','h');
+    
+      const timeRange = (s, e) => `${fmtTime(s)}–${fmtTime(e)}`;
+    
+      const prepDurationMins =
+        prep ? Math.round((prep.end - prep.start)/60000)
+             : (state.meta?.options?.prepDurationMins ?? '');
+    
+      const prepSameDay =
+        prep ? (ymdKey(prep.start, state.tz) === ymdKey(slot.start, state.tz)) : false;
+    
+      const ctx = {
+        // existing context you might already use
+        colleagueName: state.meta?.colleagueFirstName || state.meta?.colleagueEmail || '',
+        colleagueFirstName: state.meta?.colleagueFirstName || '',
+        colleagueEmail: state.meta?.colleagueEmail || '',
+        customerName: state.meta?.customerName || '',
+        meetingType: state.meta?.meetingType || '',
+        meetingDate: slot ? fmtDate(slot.start) : '',
+        meetingTime: slot ? timeRange(slot.start, slot.end) : '',
+        tz: state.tz,
+    
+        // NEW: prep-specific tokens
+        prepDate: prep ? fmtDate(prep.start) : '',
+        prepTime: prep ? timeRange(prep.start, prep.end) : '',
+        prepDurationMins: prepDurationMins,
+        prepSameDay: prepSameDay ? 'yes' : 'no',
+        prepDayName: prep ? new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, weekday:'long' }).format(prep.start) : '',
+      };
+    
       const qs = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length
         ? state.confirmQuestions
         : (state.confirmQuestion ? [state.confirmQuestion] : []);
     
+      const qWrap = document.getElementById('confirmQuestionWrap');
       qWrap.innerHTML = '';
       if (!qs.length) { qWrap.classList.add('hide'); return; }
       qWrap.classList.remove('hide'); qWrap.classList.add('notice');
@@ -969,36 +1008,39 @@
       qs.forEach((cq, idx) => {
         const title = document.createElement('div');
         title.className = 'cq-title';
-        title.textContent = (cq.label || 'Question') + (cq.required ? ' *' : '');
+        title.textContent = interp(cq.label || 'Question', ctx) + (cq.required ? ' *' : '');
         qWrap.appendChild(title);
     
         const opts = parseOptionsLoose(cq.options).map(cleanLabel);
         const saved = cq.saved != null ? cleanLabel(cq.saved) : null;
     
         opts.forEach(optRaw => {
-          const opt = cleanLabel(optRaw);
-          const id = `cq_${cq.key || ('q'+idx)}_${opt.replace(/\W+/g, '_')}`;
+          const rendered = interp(cleanLabel(optRaw), ctx);   // ← prep-aware text
+          const id = `cq_${cq.key || ('q'+idx)}_${rendered.replace(/\W+/g,'_')}`;
     
           const row = document.createElement('div'); row.className = 'cq-row';
-          const rb  = document.createElement('input');
+          const rb = document.createElement('input');
           rb.type = 'radio';
-          rb.name = `cq_${cq.key || ('q'+idx)}`;   // group by key
+          rb.name = `cq_${cq.key || ('q'+idx)}`;
           rb.id = id;
-          rb.value = opt;
-    
-          if (saved && saved === opt) rb.checked = true;
-    
+          rb.value = rendered;
+          if (saved && saved === rendered) rb.checked = true;
           rb.addEventListener('change', () => {
             const k = String(cq.key || ('q'+idx));
-            saveConfirmAnswerDebounced(k, opt);
+            saveConfirmAnswerDebounced(k, rendered);
             validateConfirmEnabled();
           });
     
-          const lab = document.createElement('label'); lab.setAttribute('for', id); lab.textContent = opt;
-          row.append(rb, lab); qWrap.appendChild(row);
+          const lab = document.createElement('label');
+          lab.setAttribute('for', id);
+          lab.textContent = rendered;
+    
+          row.append(rb, lab);
+          qWrap.appendChild(row);
         });
       });
     }
+
 
     const fmtDate = new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
     const fmtTime = new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, hour: '2-digit', minute: '2-digit', hour12: false });
@@ -1006,7 +1048,7 @@
     const timeStr = (s, e) => new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(s).replace(':', 'h') + '–' + new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(e).replace(':', 'h');
 
     confirmWhen.textContent = ''; // set below when slot passed
-    renderConfirmQuestions();
+    renderConfirmQuestions(slot);
     renderInviteList();     
     validateConfirmEnabled();
     confirmWhen.textContent = `${dateStr(slot.start)} • ${timeStr(slot.start, slot.end)}`;
@@ -1364,7 +1406,12 @@
       .finally(hideLoading);
   }
 
-
+  function interp(str, ctx={}) {
+    if (str == null) return '';
+    return String(str).replace(/\$\{(\w+)\}/g, (_, k) =>
+      (ctx[k] !== undefined && ctx[k] !== null) ? String(ctx[k]) : ''
+    );
+  }
 
   // Kick things off:
   init();
