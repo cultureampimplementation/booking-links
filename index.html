@@ -205,6 +205,22 @@
 
   <div class="breadcrumb" id="crumb"></div>
 
+  <!-- LANDING -->
+  <div id="landingView">
+    <div class="week-wrap">
+      <div class="week-head">
+        <div class="week-title">Book a session with <span id="landingColleague"></span></div>
+      </div>
+  
+      <div class="banner">Step 1 — Pick a time that works for you.</div>
+      <div class="banner" style="margin-top:8px;">Step 2 — Share a couple of quick details so we can prepare.</div>
+  
+      <footer style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+        <button class="btn" id="startBtn">Find times</button>
+      </footer>
+    </div>
+  </div>
+
   <!-- OVERVIEW -->
   <div id="overviewView">
     <div class="ov-grid" id="ovGrid"></div>
@@ -560,10 +576,14 @@
     ({ overview: tabOverview, week: tabWeek }[active]).classList.add('active');
   }
   function showOnly(view) {
+    landingView.classList.toggle('hide', view !== 'landing');
     overviewView.classList.toggle('hide', view !== 'overview');
     weekView.classList.toggle('hide', view !== 'week');
-    setTabs(view);
+    setTabs(view === 'week' || view === 'overview' ? view : 'overview'); // keep tabs style sane
   }
+  
+  const landingView = document.getElementById('landingView');
+  function setBreadcrumbForLanding(){ crumb.textContent = 'Welcome'; }
   function setBreadcrumbForOverview() { crumb.textContent = 'View: Overview'; }
   function setBreadcrumbForWeek(monKey) {
     const d = new Date(monKey + 'T00:00:00Z');
@@ -1417,15 +1437,19 @@
     apiGet('getInviteMeta', { token: t })
       .then(meta => {
         if (!meta?.ok) throw new Error(meta?.error || 'Meta fetch failed');
-
+  
         state.meta = meta;
   
-        // Who we're searching
+        // Names in header/step 2/landing
         const displayName = meta.colleagueFirstName || meta.colleagueEmail || '';
-        if (colleagueNameEl) colleagueNameEl.textContent = displayName;
-        const s2Colleague = document.getElementById('s2Colleague');
-        if (s2Colleague) s2Colleague.textContent = displayName;
-
+        colleagueNameEl?.textContent = displayName;
+        document.getElementById('s2Colleague')?.textContent = displayName;
+        document.getElementById('landingColleague')?.textContent = displayName;
+  
+        // Show LANDING immediately (instead of Overview)
+        showOnly('landing');
+        if (typeof setBreadcrumbForLanding === 'function') setBreadcrumbForLanding();
+  
         // Preload invitees
         if (Array.isArray(meta.suggestedInvitees)) {
           state.suggestedInvitees = meta.suggestedInvitees;
@@ -1434,7 +1458,7 @@
           state.preselectedCustomerEmails = meta.preselectedCustomerEmails;
         }
   
-        // Confirm questions from META (array or JSON string), with legacy fallback
+        // Confirm questions (we’ll use them in Step 2)
         if (meta.confirmQuestions || meta.confirmQuestionsJSON) {
           state.confirmQuestions = coerceCqs(meta.confirmQuestions || meta.confirmQuestionsJSON);
         }
@@ -1449,9 +1473,10 @@
         if (meta.status !== 'NEW' && !meta.allowRebook) {
           hideLoading();
           renderUsedState(meta);
-          return Promise.reject(new Error('used_link'));
+          throw new Error('used_link');
         }
   
+        // Fetch weeks in the background
         showLoading('Loading weeks…');
         return apiGet('getWeekList', { token: t, weeks: 24 });
       })
@@ -1459,7 +1484,8 @@
         // Safety gate from RES too
         if (res?.status && res.status !== 'NEW' && !res.allowRebook) {
           hideLoading();
-          return renderUsedState(res);
+          renderUsedState(res);
+          return;
         }
   
         // Timezones
@@ -1472,7 +1498,7 @@
         state.suggestedInvitees = Array.isArray(res.suggestedInvitees) ? res.suggestedInvitees : state.suggestedInvitees;
         state.preselectedCustomerEmails = Array.isArray(res.preselectedCustomerEmails) ? res.preselectedCustomerEmails : state.preselectedCustomerEmails;
   
-        // If META didn’t provide questions, take them from RES (array or JSON string), with legacy fallback
+        // If META didn’t provide questions, take them from RES
         if (!state.confirmQuestions.length) {
           if (res.confirmQuestions || res.confirmQuestionsJSON) {
             state.confirmQuestions = coerceCqs(res.confirmQuestions || res.confirmQuestionsJSON);
@@ -1482,15 +1508,27 @@
         }
   
         state.monthWeeks = buildMonthWeeksFromWeekList(res.weeks || []);
-        renderOverview();
+  
+        // Enable the CTA on the landing card
+        const startBtn = document.getElementById('startBtn');
+        if (startBtn) {
+          startBtn.disabled = false;
+          startBtn.onclick = () => {
+            showOnly('overview');
+            setBreadcrumbForOverview();
+            renderOverview();
+          };
+        }
+  
+        hideLoading();
       })
       .catch(err => {
         if (String(err?.message) !== 'used_link') {
           alert((err && err.message) || 'Failed to initialize.');
         }
-      })
-      .finally(hideLoading);
+      });
   }
+
 
   function interp(str, ctx={}) {
     if (str == null) return '';
