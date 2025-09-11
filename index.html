@@ -1048,21 +1048,6 @@
         return;
       }
     
-      // Validate all required questions
-      const qs = state.confirmQuestions?.length
-        ? state.confirmQuestions
-        : (state.confirmQuestion ? [state.confirmQuestion] : []);
-      const allAnswered = (qs || []).every((q, idx) => {
-        if (!q || !q.required) return true;
-        const group = `cq_${(q.key || ('q'+idx))}`.replace(/\W+/g, '_');
-        const chosen = document.querySelector(`#confirmQuestionWrap input[name="${group}"]:checked`);
-        return !!(chosen && chosen.value);
-      });
-      if (!allAnswered) {
-        alert('Please answer the required question(s).');
-        return;
-      }
-    
       // proceed with booking...
       confirmBtn.disabled = true;
       confirmBtn.textContent = 'Booking…';
