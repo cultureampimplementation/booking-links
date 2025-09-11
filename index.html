@@ -930,6 +930,9 @@
   }
 
   function openConfirmModal(iso, slot) {
+    const fresh = confirmBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(fresh, confirmBtn);
+    confirmBtn = fresh;
     const inviteListEl = document.getElementById('inviteList');
     const addInviteBtn = document.getElementById('addInviteBtn');
     const newInviteInp = document.getElementById('newInviteInput');
