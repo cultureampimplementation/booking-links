@@ -1121,7 +1121,7 @@
         ...(preferredPrep ? { [iso]: preferredPrep } : {})
       };
     
-      apiPost('reserveSlots', { token }, { slots: [iso], prepHints });
+      apiPost('reserveSlots', { token }, { slots: [iso], prepHints })
         .then(() => {
           confirmBtn.classList.add('success');
           confirmBtn.textContent = 'Booked!';
