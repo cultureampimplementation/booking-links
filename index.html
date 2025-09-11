@@ -1335,6 +1335,8 @@
     apiGet('getInviteMeta', { token: t })
       .then(meta => {
         if (!meta?.ok) throw new Error(meta?.error || 'Meta fetch failed');
+
+        state.meta = meta;
   
         // Who we're searching
         const displayName = meta.colleagueFirstName || meta.colleagueEmail || '';
