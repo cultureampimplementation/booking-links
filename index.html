@@ -512,7 +512,7 @@
   const loadingMsg = document.getElementById('loadingMsg');
   const confirmModal = document.getElementById('confirmModal');
   const confirmWhen = document.getElementById('confirmWhen');
-  const confirmBtn = document.getElementById('confirmBtn');
+  let confirmBtn = document.getElementById('confirmBtn');
   const closeConfirm = document.getElementById('closeConfirm');
   const colleagueNameEl = document.getElementById('colleagueName');
 
@@ -930,9 +930,9 @@
   }
 
   function openConfirmModal(iso, slot) {
-    const fresh = confirmBtn.cloneNode(true);
-    confirmBtn.parentNode.replaceChild(fresh, confirmBtn);
-    confirmBtn = fresh;
+    // Re-grab the current button node from the DOM
+    confirmBtn = document.getElementById('confirmBtn');
+  
     const inviteListEl = document.getElementById('inviteList');
     const addInviteBtn = document.getElementById('addInviteBtn');
     const newInviteInp = document.getElementById('newInviteInput');
