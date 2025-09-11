@@ -1530,11 +1530,12 @@
         if (meta.initialTz) initialTz = meta.initialTz;
         if (typeof meta.maxHolds === 'number') MAX_SELECT = meta.maxHolds;
   
-        // Gate used links unless rebook allowed
+        
         if (meta.status !== 'NEW' && !meta.allowRebook) {
           hideLoading();
-          renderUsedState(meta);
-          throw new Error('used_link');
+          refreshLandingCards({ metaOverride: meta });
+          showOnly('landing');   
+          return;                
         }
   
         // Fetch weeks in the background
@@ -1542,12 +1543,13 @@
         return apiGet('getWeekList', { token: t, weeks: 24 });
       })
       .then(res => {
-        // Safety gate from RES too
-        if (res?.status && res.status !== 'NEW' && !res.allowRebook) {
-          hideLoading();
-          renderUsedState(res);
-          return;
-        }
+      if (res?.status && res.status !== 'NEW' && !res.allowRebook) {
+        hideLoading();
+        // renderUsedState(res);   ← remove this line
+        refreshLandingCards({ metaOverride: res });
+        showOnly('landing');
+        return;
+      }
   
         // Timezones
         if (Array.isArray(res.timezones)) timezones = res.timezones;
