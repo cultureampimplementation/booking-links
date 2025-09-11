@@ -1073,8 +1073,13 @@
       (slot && slot.prep)
         ? { start: slot.prep.start.toISOString(), end: slot.prep.end.toISOString() }
         : undefined;
+      
+      const prepHints = {
+        explicitCustomerEmails,
+        ...(preferredPrep ? { [iso]: preferredPrep } : {})
+      };
     
-      apiPost('reserveSlots', { token }, { slots: [iso], extra: { explicitCustomerEmails, preferredPrep } })
+      apiPost('reserveSlots', { token }, { slots: [iso], prepHints });
         .then(() => {
           confirmBtn.classList.add('success');
           confirmBtn.textContent = 'Booked!';
