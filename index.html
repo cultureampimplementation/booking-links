@@ -415,12 +415,23 @@
 
   async function saveInviteesOnce({ suggestedInvitees, preselectedCustomerEmails, reason }) {
     try {
-      // single endpoint that writes both arrays into optionsJSON
-      await apiPost('saveInvitees', { token }, { suggestedInvitees, preselectedCustomerEmails, reason });
+      // Persist suggested list
+      await apiPost('saveSuggestedInvitees', { token }, {
+        emails: Array.isArray(suggestedInvitees) ? suggestedInvitees : []
+      });
+  
+      // Persist the “checked”/preselected list
+      await apiPost('saveCustomerEmails', { token }, {
+        emails: Array.isArray(preselectedCustomerEmails) ? preselectedCustomerEmails : []
+      });
+  
+      // (Optional) you can log reason somewhere client-side if you like
+      // console.debug('Invitees saved:', { reason });
     } catch (e) {
       console.error('saveInvitees failed:', e);
     }
   }
+
 
   // Put this near your other helpers (top of <script>)
   const coerceCqs = (v) => {
@@ -1117,7 +1128,7 @@
         ...(preferredPrep ? { [iso]: preferredPrep } : {})
       };
     
-      apiPost('reserveSlots', { token }, { slots: [iso], prepHints })
+      apiPost('reserveSlots', { token }, { slots: [iso], extra: { prepHints } })
         .then(() => {
           confirmBtn.classList.add('success');
           confirmBtn.textContent = 'Booked!';
