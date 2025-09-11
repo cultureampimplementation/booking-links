@@ -1490,12 +1490,22 @@
   
         // Names in header/step 2/landing
         const displayName = meta.colleagueFirstName || meta.colleagueEmail || '';
+        const meetingType = meta.meetingType || 'Book a session';
+        
+        // Notice/header name
         if (colleagueNameEl) colleagueNameEl.textContent = displayName;
+        
+        // Step 2 header name
         const s2ColleagueEl = document.getElementById('s2Colleague');
         if (s2ColleagueEl) s2ColleagueEl.textContent = displayName;
-        const landingColleagueEl = document.getElementById('landingColleague');
-        if (landingColleagueEl) landingColleagueEl.textContent = displayName;
-
+        
+        // Landing title: "<Meeting Type> with <Colleague>"
+        const landingTitleEl = document.querySelector('#landingView .week-title');
+        if (landingTitleEl) {
+          landingTitleEl.innerHTML = `${meetingType} with <span id="landingColleague"></span>`;
+          const landingColleagueEl = document.getElementById('landingColleague');
+          if (landingColleagueEl) landingColleagueEl.textContent = displayName;
+        }
   
         // Show LANDING immediately (instead of Overview)
         showOnly('landing');
