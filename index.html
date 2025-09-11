@@ -1058,10 +1058,19 @@
     confirmPrepEl.textContent = '';
     
     if (slot && slot.prep && slot.prep.start && slot.prep.end) {
-      const ps = slot.prep.start, pe = slot.prep.end;      // Dates (from parseSlots)
-      const sameDay = ymdKey(ps, state.tz) === ymdKey(slot.start, state.tz);
-      const label = (sameDay ? '' : (dateStr(ps) + ' • ')) + timeStr(ps, pe);
-      confirmPrepEl.textContent = `Includes prep: ${label}`;
+      const ps = slot.prep.start; // Date
+      const name =
+        state?.meta?.colleagueFirstName ||
+        state?.meta?.colleagueEmail ||
+        (colleagueNameEl && colleagueNameEl.textContent) ||
+        'they';
+    
+      const startTime = new Intl.DateTimeFormat('en-GB', {
+        timeZone: state.tz, hour: '2-digit', minute: '2-digit', hour12: false
+      }).format(ps).replace(':', 'h');
+    
+      confirmPrepEl.textContent =
+        `${name} would begin preparing for the call on ${dateStr(ps)} at ${startTime}.`;
       confirmPrepEl.style.display = '';
     }
 
