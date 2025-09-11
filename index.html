@@ -231,6 +231,17 @@
     </div>
   </div>
 
+  <!-- STEP 2 PANEL -->
+  <div id="step2" class="hide">
+    <div class="week-wrap">
+      <div class="week-head">
+        <div class="week-title">Step 2: Share your input for <span id="s2Colleague"></span>’s prep</div>
+      </div>
+      <div class="banner" id="s2Note"></div>
+      <div id="s2Questions" class="notice" style="margin-top:12px;"></div>
+    </div>
+  </div>
+
   <!-- CART MODAL -->
   <div class="modal-backdrop" id="cartModal">
     <div class="modal">
@@ -400,8 +411,10 @@
     cart: [],
     suggestedInvitees: [],
     preselectedCustomerEmails: [],
-    confirmQuestion: null,
-    confirmQuestions: []    
+    confirmQuestions: [],    
+    stage: 'overview',
+    lastBooked: null,   // {start: Date, end: Date}
+    lastPrep: null      // {start: Date, end: Date} | null
   };
 
   // Shared working state for the confirm modal, accessible to close/backdrop handlers
@@ -519,6 +532,18 @@
     for (const arr of monthWeeks.values()) arr.sort((a, b) => a.startISO.localeCompare(b.startISO));
     return { weekTotals, monthWeeks };
   }
+    function fmtDateLocal(d, tz) {
+      return new Intl.DateTimeFormat('en-GB', {
+        timeZone: tz, weekday:'short', year:'numeric', month:'short', day:'numeric'
+      }).format(d);
+    }
+    function fmtTimeLocal(d, tz) {
+      return new Intl.DateTimeFormat('en-GB', {
+        timeZone: tz, hour:'2-digit', minute:'2-digit', hour12:false
+      }).format(d).replace(':','h');
+    }
+    function fmtRangeLocal(s, e, tz) { return `${fmtTimeLocal(s, tz)}–${fmtTimeLocal(e, tz)}`; }
+
 
   /**********************
    * View toggles + loading UI
@@ -1134,6 +1159,7 @@
         .then(() => {
           confirmBtn.classList.add('success');
           confirmBtn.textContent = 'Booked!';
+          renderStep2FromSlot(slot);
           setTimeout(() => {
             confirmModal.style.display = 'none';
             pendingIso = null; pendingPill = null;
@@ -1166,6 +1192,40 @@
     }
     closeConfirmModal(true);
   };
+
+  function renderStep2FromSlot(slot) {
+    // store for later screens (optional)
+    state.lastBooked = slot ? { start: slot.start, end: slot.end } : null;
+    state.lastPrep   = (slot && slot.prep) ? { start: slot.prep.start, end: slot.prep.end } : null;
+    state.stage = 'postBook';
+  
+    // hide week/overview, show step2
+    document.getElementById('overviewView')?.classList.add('hide');
+    document.getElementById('weekView')?.classList.add('hide');
+    document.getElementById('step2')?.classList.remove('hide');
+  
+    const s2Colleague = document.getElementById('s2Colleague');
+    const s2Note = document.getElementById('s2Note');
+  
+    const colleagueName =
+      state?.meta?.colleagueFirstName ||
+      state?.meta?.colleagueEmail ||
+      'your People Scientist';
+  
+    if (s2Colleague) s2Colleague.textContent = colleagueName;
+  
+    // Banner copy
+    if (slot && slot.prep && slot.prep.start && slot.prep.end) {
+      const ps = slot.prep.start, pe = slot.prep.end;
+      s2Note.textContent =
+        `${colleagueName} is holding time at ${fmtRangeLocal(ps, pe, state.tz)} on ${fmtDateLocal(ps, state.tz)} to prepare for your session. Please share your input below ahead of this time.`;
+    } else {
+      s2Note.textContent = 'Please share a bit of context to help us prepare for your session.';
+    }
+  
+    // For now we won’t render questions here—keeping them in the modal until the next step.
+    // s2Questions stays empty for now.
+  }
 
 
 
@@ -1350,7 +1410,9 @@
         // Who we're searching
         const displayName = meta.colleagueFirstName || meta.colleagueEmail || '';
         if (colleagueNameEl) colleagueNameEl.textContent = displayName;
-  
+        const s2Colleague = document.getElementById('s2Colleague');
+        if (s2Colleague) s2Colleague.textContent = displayName;
+
         // Preload invitees
         if (Array.isArray(meta.suggestedInvitees)) {
           state.suggestedInvitees = meta.suggestedInvitees;
