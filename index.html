@@ -205,7 +205,7 @@
   </style>
 </head>
 <body>
-  <h1>Pick meeting times</h1>
+  <h1 class="hide">Pick meeting times</h1>
 
   <div class="controls">
     <div class="tabs">
@@ -227,7 +227,7 @@
     <span id="colleagueName"></span>’s calendar for availability - including enough time for their preparation.
   </div>
 
-  <div class="breadcrumb" id="crumb"></div>
+  <div class="breadcrumb hide" id="crumb"></div>
 
   <!-- LANDING -->
   <div id="landingView">
@@ -612,18 +612,18 @@
   }
   function showOnly(view) {
     const onLanding = view === 'landing';
+    document.querySelector('h1')?.classList.toggle('hide', onLanding); // <-- Add this line
     document.querySelector('.controls')?.classList.toggle('hide', onLanding);
     document.getElementById('notice')?.classList.toggle('hide', onLanding);
     document.getElementById('crumb')?.classList.toggle('hide', onLanding);
-  
+    
     landingView.classList.toggle('hide', !onLanding);
     overviewView.classList.toggle('hide', view !== 'overview');
     weekView.classList.toggle('hide', view !== 'week');
-  
+    
     // Keep tab styling sane when landing is shown
     setTabs(view === 'week' ? 'week' : 'overview');
   }
-
   
   const landingView = document.getElementById('landingView');
   function setBreadcrumbForLanding(){ crumb.textContent = 'Welcome'; }
