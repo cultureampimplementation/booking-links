@@ -236,8 +236,20 @@
         <div class="week-title">Book a session with <span id="landingColleague"></span></div>
       </div>
   
-      <div class="banner">Step 1 — Pick a time that works for you.</div>
-      <div class="banner" style="margin-top:8px;">Step 2 — Share a couple of quick details so we can prepare.</div>
+      <div class="landing-steps">
+        <div class="step-card">
+          <h3>Step 1</h3>
+          <p>Pick a time that works for you.</p>
+        </div>
+        <div class="step-card">
+          <h3>Step 2</h3>
+          <p>Share a couple of quick details so we can prepare.</p>
+        </div>
+      </div>
+      <footer style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+        <button class="btn" id="startBtn">Find times</button>
+      </footer>
+
   
       <footer style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
         <button class="btn" id="startBtn">Find times</button>
@@ -600,11 +612,19 @@
     ({ overview: tabOverview, week: tabWeek }[active]).classList.add('active');
   }
   function showOnly(view) {
-    landingView.classList.toggle('hide', view !== 'landing');
+    const onLanding = view === 'landing';
+    document.querySelector('.controls')?.classList.toggle('hide', onLanding);
+    document.getElementById('notice')?.classList.toggle('hide', onLanding);
+    document.getElementById('crumb')?.classList.toggle('hide', onLanding);
+  
+    landingView.classList.toggle('hide', !onLanding);
     overviewView.classList.toggle('hide', view !== 'overview');
     weekView.classList.toggle('hide', view !== 'week');
-    setTabs(view === 'week' || view === 'overview' ? view : 'overview'); // keep tabs style sane
+  
+    // Keep tab styling sane when landing is shown
+    setTabs(view === 'week' ? 'week' : 'overview');
   }
+
   
   const landingView = document.getElementById('landingView');
   function setBreadcrumbForLanding(){ crumb.textContent = 'Welcome'; }
