@@ -1545,7 +1545,7 @@
           hideLoading();
           refreshLandingCards({ metaOverride: meta });
           showOnly('landing');   
-          return;                
+          throw new Error('used_link');
         }
   
         // Fetch weeks in the background
