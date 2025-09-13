@@ -1502,7 +1502,7 @@
     const t = token;
     if (!t) { alert('Missing token in URL (?token=...)'); return; }
   
-    showLoading('Checking your link…');
+    showLoading('Loading your meeting details…');
   
     apiGet('getInviteMeta', { token: t })
       .then(meta => {
