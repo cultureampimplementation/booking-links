@@ -1561,42 +1561,35 @@
           showOnly('landing');   
           throw new Error('used_link');
         }
-  
-        // Fetch weeks in the background
-        showLoading('Loading weeks…');
-        return apiGet('getWeekList', { token: t, weeks: 24 });
-      })
-      .then(res => {
-      if (res?.status && res.status !== 'NEW' && !res.allowRebook) {
-        hideLoading();
-        // renderUsedState(res);   ← remove this line
-        refreshLandingCards({ metaOverride: res });
-        showOnly('landing');
-        return;
-      }
-  
-        // Timezones
-        if (Array.isArray(res.timezones)) timezones = res.timezones;
-        if (res.initialTz) initialTz = res.initialTz;
+
+        // Build weeks locally instead of fetching
+        const opts = {
+          initialTz: meta.initialTz || initialTz || 'UTC',
+          weeks: 24,
+          minNoticeDays: Number(meta?.options?.minNoticeDays ?? 0),
+          weekdaysCSV: String(meta?.options?.weekdaysCSV || 'Mon,Tue,Wed,Thu,Fri'),
+          blackoutDatesCSV: String(meta?.options?.blackoutDatesCSV || '')
+        };
+    
+        if (Array.isArray(meta.timezones)) timezones = meta.timezones;
+        if (opts.initialTz) initialTz = opts.initialTz;
         populateTzSelect(timezones, initialTz);
-  
-        // Other options
-        MAX_SELECT = Number(res.maxHolds || MAX_SELECT || 1);
-        state.suggestedInvitees = Array.isArray(res.suggestedInvitees) ? res.suggestedInvitees : state.suggestedInvitees;
-        state.preselectedCustomerEmails = Array.isArray(res.preselectedCustomerEmails) ? res.preselectedCustomerEmails : state.preselectedCustomerEmails;
-  
-        // If META didn’t provide questions, take them from RES
+    
+        if (typeof meta.maxHolds === 'number') MAX_SELECT = meta.maxHolds;
+    
+        if (Array.isArray(meta.suggestedInvitees)) state.suggestedInvitees = meta.suggestedInvitees;
+        if (Array.isArray(meta.preselectedCustomerEmails)) state.preselectedCustomerEmails = meta.preselectedCustomerEmails;
+    
         if (!state.confirmQuestions.length) {
-          if (res.confirmQuestions || res.confirmQuestionsJSON) {
-            state.confirmQuestions = coerceCqs(res.confirmQuestions || res.confirmQuestionsJSON);
-          } else if (res.confirmQuestion) {
-            state.confirmQuestions = [res.confirmQuestion];
+          if (meta.confirmQuestions || meta.confirmQuestionsJSON) {
+            state.confirmQuestions = coerceCqs(meta.confirmQuestions || meta.confirmQuestionsJSON);
+          } else if (meta.confirmQuestion) {
+            state.confirmQuestions = [meta.confirmQuestion];
           }
         }
-  
-        state.monthWeeks = buildMonthWeeksFromWeekList(res.weeks || []);
     
-        hideLoading();
+        const localWeeks = generateWeeksLocally(opts);
+        state.monthWeeks = buildMonthWeeksFromWeekList(localWeeks);
       })
       .catch(err => {
         if (String(err?.message) !== 'used_link') {
@@ -1693,6 +1686,56 @@
     return String(str).replace(/\$\{(\w+)\}/g, (_, k) =>
       (ctx[k] !== undefined && ctx[k] !== null) ? String(ctx[k]) : ''
     );
+  }
+
+  function parseAllowedWeekdays(csv='Mon,Tue,Wed,Thu,Fri'){
+    const map = {Sun:7, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6};
+    return new Set(csv.split(',').map(s=>map[String(s).trim().slice(0,3)]).filter(Boolean));
+  }
+  function dayOfWeekFromKey(dayKey){ // Mon=1 ... Sun=7 (UTC)
+    const js = new Date(dayKey + 'T00:00:00Z').getUTCDay(); // Sun=0..Sat=6
+    return js === 0 ? 7 : js;
+  }
+  
+  function generateWeeksLocally({
+    initialTz = 'UTC',
+    weeks = 24,
+    minNoticeDays = 0,
+    weekdaysCSV = 'Mon,Tue,Wed,Thu,Fri',
+    blackoutDatesCSV = ''
+  } = {}) {
+    // Anchor from "this week's Monday" (in your UI you label by Monday starts)
+    const today = todayKey(initialTz);            // 'YYYY-MM-DD' in user's tz
+    const firstMonday = mondayKey(today);         // Monday key of the current week
+    const minStartKey = plusDaysKey(today, minNoticeDays); // earliest bookable day (yyyy-mm-dd)
+  
+    const allowedWeekdays = parseAllowedWeekdays(weekdaysCSV);
+    const blackouts = new Set(
+      String(blackoutDatesCSV || '')
+        .split(/[,\s]+/)
+        .map(s => s.trim())
+        .filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s))
+    );
+  
+    const out = [];
+    for (let i = 0; i < weeks; i++) {
+      const monKey = plusDaysKey(firstMonday, i * 7);
+      const days = weekDaysFromMondayKey(monKey);
+  
+      // selectable if ANY allowed day in the week is on/after minStart and not blacked out
+      const selectable = days.some(dayKey =>
+        dayKey >= minStartKey &&
+        !blackouts.has(dayKey) &&
+        allowedWeekdays.has(dayOfWeekFromKey(dayKey))
+      );
+  
+      out.push({
+        startISO: new Date(monKey + 'T00:00:00Z').toISOString(),
+        weekNum:  isoWeekNumberFromKey(monKey),
+        selectable
+      });
+    }
+    return out;
   }
 
   // Kick things off:
