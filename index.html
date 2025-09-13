@@ -209,6 +209,19 @@
     .step-card:active{ transform:translateY(1px); }
     .step-card h3{ margin:0 0 6px; font-size:18px; font-weight:800; }
     .step-card p { margin:0; font-size:14px; color:#374151; }
+    
+    /* step-card state variants + subtle link */
+    .step-card.active  { cursor: pointer; opacity: 1; }
+    .step-card.locked  { cursor: default; opacity: .98; }
+    .step-card.inactive{
+      background:#f3f4f6; border-color:#e5e7eb; color:#6b7280;
+      cursor: default; box-shadow:none;
+    }
+    .step-subtle{
+      margin-top:6px; font-size:12px; text-decoration:underline;
+      cursor:pointer; opacity:.85;
+    }
+
 
   </style>
 </head>
@@ -1523,13 +1536,14 @@
         const s2ColleagueEl = document.getElementById('s2Colleague');
         if (s2ColleagueEl) s2ColleagueEl.textContent = displayName;
         
-        // Landing title: "<Meeting Type> with <Colleague> [· for <Customer>]"
+        // Landing title (two lines):
+        // "<Customer Name> & Culture Amp"
+        // "<Meeting Type> with <Colleague First Name>"
         const landingTitleEl = document.querySelector('#landingView .week-title');
         if (landingTitleEl) {
-          let html = `${meetingType} with <span id="landingColleague"></span>`;
-          if (customerName) html += ` <span class="notice">· for ${escapeHtml(customerName)}</span>`;
-          landingTitleEl.innerHTML = html;
-        
+          landingTitleEl.innerHTML =
+            `<div style="font-weight:800">${escapeHtml(customerName)} &amp; Culture Amp</div>
+             <div>${escapeHtml(meetingType)} with <span id="landingColleague"></span></div>`;
           const landingColleagueEl = document.getElementById('landingColleague');
           if (landingColleagueEl) landingColleagueEl.textContent = displayName;
         }
@@ -1537,14 +1551,6 @@
         // Show LANDING immediately (instead of Overview)
         showOnly('landing');
         refreshLandingCards();
-        
-        // Make the step cards act like big buttons
-        document.querySelectorAll('#landingView .step-card').forEach(card => {
-          card.addEventListener('click', goToOverview);
-          card.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goToOverview(); }
-          });
-        });
 
         if (typeof setBreadcrumbForLanding === 'function') setBreadcrumbForLanding();
   
@@ -1625,83 +1631,69 @@
     const s2 = document.getElementById('step2Card');
     if (!s1 || !s2) return;
   
-    // Source of truth for what's booked:
-    //  - If we just booked in-session → state.lastBooked / state.lastPrep
-    //  - If we’re loading a USED link → metaOverride (from renderUsedState) or state.meta
     const meta = metaOverride || state.meta || {};
-    const slot = state.lastBooked || (meta.bookedStartISO ? { 
-      start: new Date(meta.bookedStartISO), 
-      end:   meta.bookedEndISO ? new Date(meta.bookedEndISO) : null 
-    } : null);
+    const flow = computeFlow(meta);
   
-    const withPrep =
-      // if we just booked and the slot has prep, that wins
-      !!state.lastPrep ||
-      // otherwise infer from meta/options (meeting types that require prep)
-      (!!(meta?.options?.prepDurationMins > 0) || !!(state?.meta?.options?.prepDurationMins > 0));
+    const tz = state.tz || meta.initialTz || 'UTC';
+    const sel = getPrimarySelectedStart(meta); // Date | null
+    const end = meta.bookedEndISO ? new Date(meta.bookedEndISO)
+              : (sel ? new Date(sel.getTime() + 30*60000) : null);
   
-    // If we *know* the prep block start/end, use them (fresh booking path)
-    const prep = state.lastPrep || (meta.prepStartISO && meta.prepEndISO ? {
-      start: new Date(meta.prepStartISO),
-      end:   new Date(meta.prepEndISO)
-    } : null);
+    const whenDate = sel ? fmtDateLocal(sel, tz) : '';
+    const whenTime = (sel && end) ? fmtRangeLocal(sel, end, tz) : '';
   
-    const colleagueName =
-      state?.meta?.colleagueFirstName ||
-      state?.meta?.colleagueEmail ||
-      meta?.colleagueFirstName ||
-      meta?.colleagueEmail ||
-      'your People Scientist';
+    const colleagueFirst = meta.colleagueFirstName || 'your People Scientist';
   
-    const colleagueEmail =
-      state?.meta?.colleagueEmail || meta?.colleagueEmail || '';
-  
-    // Default (not booked yet)
-    if (!slot || isNaN(+slot.start)) {
-      s1.innerHTML = `
-        <h3>Step 1</h3>
-        <p>Pick a time that works for you.</p>
-      `;
-      s2.innerHTML = `
-        <h3>Step 2</h3>
-        <p>Share a couple of quick details so we can prepare.</p>
-      `;
+    if (flow === 'NEW') {
+      setStepCard(s1, {
+        state: 'active',
+        title: 'Step 1',
+        body: 'Pick a time that works for you.',
+        onClick: () => goToOverview()
+      });
+      setStepCard(s2, {
+        state: 'inactive',
+        title: 'Step 2',
+        body: `Share a couple of quick details so ${colleagueFirst} can prepare.`
+      });
       return;
     }
   
-    // Formats
-    const whenDate = fmtDateLocal(slot.start, state.tz);
-    const whenTime = fmtRangeLocal(slot.start, slot.end || new Date(slot.start.getTime() + 30*60000), state.tz);
-  
-    // STEP 1 — booked look
-    s1.innerHTML = `
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <div style="font-size:22px;font-weight:800;">📅 Booked! for</div>
-        <div style="font-size:18px;font-weight:800;">${whenDate} ${whenTime}</div>
-        ${colleagueEmail ? `
-          <div style="margin-top:6px;">Contact <a href="mailto:${encodeURIComponent(colleagueEmail)}">${colleagueEmail}</a> directly if you can't see this in your calendar.</div>
-        ` : ''}
-        <div style="margin-top:4px;font-size:13px;color:#555;">Need to reschedule? browse for another time.</div>
-      </div>
-    `;
-  
-    // STEP 2 — copy differs if there’s a prep block
-    if (withPrep) {
-      const prepLine = prep
-        ? `${colleagueName} is holding time at ${fmtRangeLocal(prep.start, prep.end, state.tz)} on ${fmtDateLocal(prep.start, state.tz)} to prepare for this session. Please share your input ahead of this time.`
-        : `Please share a couple of quick details so ${colleagueName} can prepare.`;
-      s2.innerHTML = `
-        <h3>Step 2: Share your input for ${colleagueName}’s prep</h3>
-        <p>${prepLine}</p>
-      `;
-    } else {
-      s2.innerHTML = `
-        <h3>Step 2: Share your questions, for ${colleagueName}’s prep</h3>
-        <p>Tell us what would be most helpful to cover in the session.</p>
-      `;
+    if (flow === 'USED_FUTURE') {
+      setStepCard(s1, {
+        state: 'locked',
+        title: 'Booked',
+        body: `${whenDate} • ${whenTime}`,
+        showRebook: !!meta.allowRebook
+      });
+      setStepCard(s2, {
+        state: 'active',
+        title: 'Step 2',
+        body: `Share a couple of details so ${colleagueFirst} can prepare.`,
+        onClick: () => {
+          // Open Step 2 using the booked slot context (synthesized if needed)
+          const slot = sel ? { start: sel, end: end } : null;
+          if (slot) renderStep2FromSlot(slot);
+          document.getElementById('step2')?.classList.remove('hide');
+          document.getElementById('overviewView')?.classList.add('hide');
+          document.getElementById('weekView')?.classList.add('hide');
+        }
+      });
+      return;
     }
+  
+    // USED_PAST
+    setStepCard(s1, {
+      state: 'locked',
+      title: 'Booked',
+      body: `${whenDate} • ${whenTime}`
+    });
+    setStepCard(s2, {
+      state: 'inactive',
+      title: 'Step 2',
+      body: 'The meeting booked with this link is in the past'
+    });
   }
-
 
   function interp(str, ctx={}) {
     if (str == null) return '';
@@ -1759,6 +1751,56 @@
     }
     return out;
   }
+
+  /* ===== Landing flow helpers ===== */
+  function getPrimarySelectedStart(meta) {
+    // Try selectedStartsJSON (array or JSON string), else bookedStartISO
+    let arr = [];
+    try {
+      if (Array.isArray(meta.selectedStartsJSON)) arr = meta.selectedStartsJSON;
+      else if (typeof meta.selectedStartsJSON === 'string' && meta.selectedStartsJSON.trim()) {
+        arr = JSON.parse(meta.selectedStartsJSON);
+      }
+    } catch { /* ignore */ }
+  
+    const dates = (arr || []).map(s => new Date(s)).filter(d => !isNaN(+d));
+    if (!dates.length && meta.bookedStartISO) {
+      const d = new Date(meta.bookedStartISO);
+      return isNaN(+d) ? null : d;
+    }
+    if (!dates.length) return null;
+  
+    const now = new Date();
+    const future = dates.filter(d => d > now).sort((a,b)=>a-b);
+    if (future.length) return future[0];          // earliest future
+    return dates.sort((a,b)=>b-a)[0];             // latest past
+  }
+  
+  function computeFlow(meta){
+    const sel = getPrimarySelectedStart(meta);
+    if (!sel) return 'NEW';
+    return (sel > new Date()) ? 'USED_FUTURE' : 'USED_PAST';
+  }
+  
+  function setStepCard(el, {state, title, body, onClick, showRebook}) {
+    el.classList.remove('active','locked','inactive');
+    el.classList.add(state); // 'active' | 'locked' | 'inactive'
+    el.innerHTML = `
+      <h3>${escapeHtml(title)}</h3>
+      <p>${escapeHtml(body)}</p>
+      ${showRebook ? `<div class="step-subtle" id="rebookLink">Rebook</div>` : '' }
+    `;
+    el.onclick = null;
+    if (state === 'active' && typeof onClick === 'function') {
+      el.onclick = onClick;
+    } else if (showRebook) {
+      el.querySelector('#rebookLink')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        goToOverview();
+      });
+    }
+  }
+
 
   // Kick things off:
   init();
