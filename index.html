@@ -38,7 +38,15 @@
     .breadcrumb a { color: inherit; text-decoration: underline; cursor: pointer; }
 
     /* ===== Overview (Months with Week rows) ===== */
-    .ov-grid { display: grid; justify-items: start; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; margin-top: 12px; }
+    
+    .ov-grid{
+      display: grid;
+      grid-template-columns: repeat(auto-fill, 320px); /* fixed tracks */
+      gap: 14px;
+      justify-content: start; /* left-align the grid */
+      margin-top: 12px;       /* keep your original spacing */
+    }
+
     .mcard { border: 1px solid #e0e0e0; border-radius: 12px; padding: 12px; background: #fff; width: 320px; }
     .mcard:hover { box-shadow: 0 2px 10px rgba(0,0,0,.06); }
     .mhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
