@@ -1788,7 +1788,7 @@ function generateWeeksForCurrentQuarter({
     if (flow === 'USED_FUTURE') {
       setStepCard(s1, {
         state: 'locked',
-        title: 'Booked',
+        title: '✅ Booked',
         body: `${whenDate} • ${whenTime}`,
         showRebook: !!meta.allowRebook,
         extraClass: 'booked'
@@ -1812,7 +1812,7 @@ function generateWeeksForCurrentQuarter({
     // USED_PAST
     setStepCard(s1, {
       state: 'locked',
-      title: 'Booked',
+      title: 'Meeting date passed',
       body: `${whenDate} • ${whenTime}`,
       extraClass: 'booked'
     });
