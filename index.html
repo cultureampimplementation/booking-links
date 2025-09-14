@@ -1673,7 +1673,7 @@
       setStepCard(s2, {
         state: 'inactive',
         title: 'Step 2',
-        body: `Share a couple of quick details so ${colleagueFirst} can prepare.`
+        body: `Share some details so ${colleagueFirst} can prepare.`
       });
       return;
     }
@@ -1689,7 +1689,7 @@
       setStepCard(s2, {
         state: 'active',
         title: 'Step 2',
-        body: `Share a couple of details so ${colleagueFirst} can prepare.`,
+        body: `Share some details below, so ${colleagueFirst} can prepare.`,
         onClick: () => {
           // Open Step 2 using the booked slot context (synthesized if needed)
           const slot = sel ? { start: sel, end: end } : null;
