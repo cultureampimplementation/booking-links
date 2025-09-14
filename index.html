@@ -1730,8 +1730,20 @@ function generateWeeksForCurrentQuarter({
           }
         }
     
-        const localWeeks = generateWeeksForCurrentQuarter(opts);
+        // how far ahead to show (default: 12 months ≈ 52 weeks)
+        const monthsAhead = Number(state.meta?.options?.monthsAhead ?? 12);
+        const weeksAhead  = Math.min(52, Math.ceil(monthsAhead * 4.35)); // cap at ~1 year
+        
+        const localWeeks = generateWeeksLocally({
+          initialTz: opts.initialTz || 'UTC',
+          weeks: weeksAhead,                         // <<< was current quarter only
+          minNoticeDays: opts.minNoticeDays,
+          weekdaysCSV:  opts.weekdaysCSV,
+          blackoutDatesCSV: opts.blackoutDatesCSV
+        });
+        
         state.monthWeeks = buildMonthWeeksFromWeekList(localWeeks);
+
       })
       .catch(err => {
         if (String(err?.message) !== 'used_link') {
