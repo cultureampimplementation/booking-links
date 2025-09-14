@@ -41,13 +41,23 @@
     
     .ov-grid{
       display: grid;
-      grid-template-columns: repeat(auto-fill, 320px); /* fixed tracks */
+      grid-template-columns: repeat(auto-fill, 320px);
       gap: 14px;
-      justify-content: start; /* left-align the grid */
-      margin-top: 12px;       /* keep your original spacing */
+      justify-content: start;
+      margin-top: 12px;
     }
 
-    .mcard { border: 1px solid #e0e0e0; border-radius: 12px; padding: 12px; background: #fff; width: 320px; }
+    .mcard{
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+      width: 100%;            /* was 320px */
+      box-sizing: border-box; /* include borders/padding in width */
+      /* optional safety: */
+      min-width: 0;
+      overflow: hidden;
+    }
     .mcard:hover { box-shadow: 0 2px 10px rgba(0,0,0,.06); }
     .mhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
     .mname { font-weight: 800; font-size: 18px; }
