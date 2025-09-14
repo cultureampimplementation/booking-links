@@ -221,6 +221,17 @@
       margin-top:6px; font-size:12px; text-decoration:underline;
       cursor:pointer; opacity:.85;
     }
+    /* Booked/confirmed look for Step 1 */
+    .step-card.booked{
+      background:#e8f5e9;           /* soft green */
+      border-color:#b7dfc2;
+    }
+    .step-card.booked h3,
+    .step-card.booked p{
+      color:#166534;                 /* deep green text */
+    }
+    .step-card.booked:hover{ filter:brightness(0.98); }
+
 
 
   </style>
@@ -1672,7 +1683,8 @@
         state: 'locked',
         title: 'Booked',
         body: `${whenDate} • ${whenTime}`,
-        showRebook: !!meta.allowRebook
+        showRebook: !!meta.allowRebook,
+        extraClass: 'booked'
       });
       setStepCard(s2, {
         state: 'active',
@@ -1694,7 +1706,8 @@
     setStepCard(s1, {
       state: 'locked',
       title: 'Booked',
-      body: `${whenDate} • ${whenTime}`
+      body: `${whenDate} • ${whenTime}`,
+      extraClass: 'booked'
     });
     setStepCard(s2, {
       state: 'inactive',
@@ -1790,14 +1803,17 @@
     return (sel > new Date()) ? 'USED_FUTURE' : 'USED_PAST';
   }
   
-  function setStepCard(el, {state, title, body, onClick, showRebook}) {
-    el.classList.remove('active','locked','inactive');
-    el.classList.add(state); // 'active' | 'locked' | 'inactive'
+  function setStepCard(el, {state, title, body, onClick, showRebook, extraClass}) {
+    el.classList.remove('active','locked','inactive','booked'); // ← also remove 'booked'
+    el.classList.add(state);
+    if (extraClass) el.classList.add(extraClass);               // ← add it if requested
+  
     el.innerHTML = `
       <h3>${escapeHtml(title)}</h3>
       <p>${escapeHtml(body)}</p>
       ${showRebook ? `<div class="step-subtle" id="rebookLink">Rebook</div>` : '' }
     `;
+  
     el.onclick = null;
     if (state === 'active' && typeof onClick === 'function') {
       el.onclick = onClick;
@@ -1808,6 +1824,7 @@
       });
     }
   }
+
 
 
   // Kick things off:
