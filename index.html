@@ -236,6 +236,10 @@
     .inline-controls .btn{ background:#fff; }
     .inline-title{ font-weight:800; margin:0 0 6px; }
 
+    .inline-controls{ display:flex; gap:8px; align-items:center; margin:12px 0 4px; justify-content:center; }
+    .inline-title{ font-weight:800; margin:12px 0 6px; }
+
+
 
   </style>
 </head>
@@ -1823,7 +1827,7 @@
     } else if (showRebook) {
       el.querySelector('#rebookLink')?.addEventListener('click', (e) => {
         e.stopPropagation();
-        goToOverview();
+        showInlineOverview();
       });
     }
   }
@@ -1831,39 +1835,7 @@
   /**********************
    * Inline Quarter + Week (on the landing page)
    **********************/
-  
-  // group months (YYYY-MM) into calendar quarters (YYYY-Qn), sorted ascending
-  function computeQuartersFromMonthWeeks() {
-    const months = [...(state.monthWeeks?.keys() || [])].sort(); // ["2025-01", "2025-02", ...]
-    const groups = new Map(); // key "YYYY-Qn" -> { label, months: [] }
-  
-    const pad = n => String(n).padStart(2,'0');
-    months.forEach(ym => {
-      const [yStr, mStr] = ym.split('-');
-      const y = +yStr, m = +mStr;
-      const q = Math.floor((m - 1) / 3) + 1; // 1..4
-      const key = `${y}-Q${q}`;
-      if (!groups.has(key)) {
-        groups.set(key, {
-          key,
-          label: `Q${q} ${y}`,
-          months: []
-        });
-      }
-      groups.get(key).months.push(`${y}-${pad(m)}`);
-    });
-  
-    // sort by year + quarter number
-    const list = [...groups.values()].sort((a,b) => {
-      const [ay, aq] = a.key.split('-Q').map(Number);
-      const [by, bq] = b.key.split('-Q').map(Number);
-      if (ay !== by) return ay - by;
-      return aq - bq;
-    });
-  
-    return list;
-  }
-  
+    
   // figure out which quarter is "current" (closest to today)
   function findCurrentQuarterIndex(quarters) {
     if (!quarters?.length) return 0;
@@ -1876,77 +1848,168 @@
     return i >= 0 ? i : 0;
   }
   
-  // show the quarter overview below the step cards
-  function showInlineOverview(startAtIndex) {
-    const mount = document.getElementById('landingInline');
-    if (!mount) return;
-  
-    // build quarter list once and remember cursor
-    if (!state._quarters) state._quarters = computeQuartersFromMonthWeeks();
-    if (typeof state._qIndex !== 'number') state._qIndex = findCurrentQuarterIndex(state._quarters);
-    if (typeof startAtIndex === 'number') state._qIndex = Math.max(0, Math.min(state._quarters.length - 1, startAtIndex));
-  
-    renderQuarterAtIndex(state._qIndex);
+/**********************
+ * Inline Quarter + Week (landing page, "See more" appends)
+ **********************/
+
+// helpers
+function ymToDate(ym){ const [y,m]=ym.split('-').map(Number); return new Date(Date.UTC(y, m-1, 1)); }
+function monthTitleFromYM(ym){ const [y,m]=ym.split('-').map(Number); return monthTitle(y,m); }
+function qKeyOfYM(ym){
+  const [y,m] = ym.split('-').map(Number);
+  const q = Math.floor((m-1)/3)+1;
+  return `${y}-Q${q}`;
+}
+function monthsInQuarter(y,q){
+  const start = (q-1)*3+1;
+  const pad = n => String(n).padStart(2,'0');
+  return [`${y}-${pad(start)}`, `${y}-${pad(start+1)}`, `${y}-${pad(start+2)}`];
+}
+function parseQKey(qkey){ const [y, qpart] = qkey.split('-Q'); return { y: +y, q: +qpart }; }
+
+// Build a continuous list of quarters spanning the data you have.
+// Always include the "current quarter" even if no weeks exist in some months.
+function buildQuarterListFull(){
+  const keys = [...(state.monthWeeks?.keys() || [])].sort(); // ["YYYY-MM", ...]
+  const now = new Date();
+  const curY = now.getUTCFullYear();
+  const curM = now.getUTCMonth() + 1;
+  const curQKey = `${curY}-Q${Math.floor((curM-1)/3)+1}`;
+
+  let minYM = keys[0] || `${curY}-${String(curM).padStart(2,'0')}`;
+  let maxYM = keys[keys.length-1] || minYM;
+
+  // Expand bounds to at least the current quarter
+  const minD = ymToDate(minYM);
+  const maxD = ymToDate(maxYM);
+  const curD = ymToDate(`${curY}-${String(curM).padStart(2,'0')}`);
+  if (minD > curD) minYM = `${curY}-${String(curM).padStart(2,'0')}`;
+  if (maxD < curD) maxYM = `${curY}-${String(curM).padStart(2,'0')}`;
+
+  // Iterate quarter by quarter from min to max
+  const list = [];
+  let y = ymToDate(minYM).getUTCFullYear();
+  let m = ymToDate(minYM).getUTCMonth()+1;
+
+  const toQ = (yy,mm)=> Math.floor((mm-1)/3)+1;
+  const toNextQuarter = (yy,qq)=> (qq===4)? {y:yy+1,q:1} : {y:yy,q:qq+1};
+
+  const maxY = ymToDate(maxYM).getUTCFullYear();
+  const maxQ = toQ(maxY, ymToDate(maxYM).getUTCMonth()+1);
+
+  let yy = y, qq = toQ(y,m);
+  while (true){
+    const key = `${yy}-Q${qq}`;
+    list.push({
+      key,
+      label: `Q${qq} ${yy}`,
+      months: monthsInQuarter(yy, qq)
+    });
+    if (yy === maxY && qq === maxQ) break;
+    ({y:yy, q:qq} = toNextQuarter(yy, qq));
   }
-  
-  function renderQuarterAtIndex(idx) {
-    const mount = document.getElementById('landingInline');
-    const quarters = state._quarters || [];
-    if (!mount || !quarters.length) {
-      mount && (mount.innerHTML = '<div class="notice">No weeks available right now.</div>');
-      return;
-    }
-  
-    state._qIndex = Math.max(0, Math.min(quarters.length - 1, idx));
-    const quarter = quarters[state._qIndex];
-  
-    // clear area
-    mount.innerHTML = '';
-  
-    // title + controls
-    const title = document.createElement('div');
-    title.className = 'inline-title';
-    title.textContent = quarter.label;
-    mount.appendChild(title);
-  
-    const ctrls = document.createElement('div');
-    ctrls.className = 'inline-controls';
-    const prev = document.createElement('button');
-    prev.className = 'btn';
-    prev.textContent = '← Previous quarter';
-    prev.disabled = state._qIndex === 0;
-    prev.onclick = () => renderQuarterAtIndex(state._qIndex - 1);
-    const next = document.createElement('button');
-    next.className = 'btn';
-    next.textContent = 'Next quarter →';
-    next.disabled = state._qIndex === quarters.length - 1;
-    next.onclick = () => renderQuarterAtIndex(state._qIndex + 1);
-    ctrls.append(prev, next);
-    mount.appendChild(ctrls);
-  
-    // months grid (re-uses your mcard markup)
-    const grid = document.createElement('div');
-    grid.className = 'ov-grid';
-  
-    // only render months that exist in state.monthWeeks
-    (quarter.months || []).forEach(ym => {
-      const weeks = state.monthWeeks.get(ym);
-      if (!weeks || !weeks.length) return;
-  
-      const [y, m] = ym.split('-').map(Number);
-  
-      const card = document.createElement('div'); card.className = 'mcard';
-      const head = document.createElement('div'); head.className = 'mhead';
-      const name = document.createElement('div'); name.className = 'mname'; name.textContent = monthTitle(y, m);
-      head.appendChild(name); card.appendChild(head);
-  
-      const list = document.createElement('div'); list.className = 'weeks';
+
+  // Ensure current quarter is in the list (in case min/max were odd)
+  if (!list.find(q => q.key === curQKey)){
+    const {y:cy, q:cq} = parseQKey(curQKey);
+    const insert = { key: curQKey, label: `Q${cq} ${cy}`, months: monthsInQuarter(cy, cq) };
+    // insert in sorted order
+    const idx = list.findIndex(q => q.key > curQKey);
+    if (idx === -1) list.push(insert); else list.splice(idx, 0, insert);
+  }
+
+  return list;
+}
+
+function findCurrentQuarterIndex(quarters){
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth()+1;
+  const q = Math.floor((m-1)/3)+1;
+  const key = `${y}-Q${q}`;
+  const i = quarters.findIndex(x => x.key === key);
+  return i >= 0 ? i : 0;
+}
+
+// public entry from Step 1 / Rebook
+function showInlineOverview(){
+  const mount = document.getElementById('landingInline');
+  if (!mount) return;
+
+  state._quarters = buildQuarterListFull();
+  state._qStartIndex = findCurrentQuarterIndex(state._quarters);
+  state._qRenderedEnd = state._qStartIndex;             // render current quarter first
+
+  renderInlineQuarterList();                             // draws current quarter
+}
+
+function renderInlineQuarterList(){
+  const mount = document.getElementById('landingInline');
+  if (!mount) return;
+
+  // Full re-render of all currently "expanded" quarters
+  mount.innerHTML = '';
+
+  const quarters = state._quarters || [];
+  if (!quarters.length){
+    mount.innerHTML = '<div class="notice">No weeks available.</div>';
+    return;
+  }
+
+  const start = state._qStartIndex ?? 0;
+  const end   = state._qRenderedEnd ?? start;
+
+  for (let i = start; i <= end; i++){
+    renderQuarterSection(quarters[i], mount);
+  }
+
+  // "See more" (append one more quarter)
+  const moreWrap = document.createElement('div');
+  moreWrap.className = 'inline-controls';
+  const moreBtn = document.createElement('button');
+  moreBtn.className = 'btn';
+  moreBtn.textContent = (end < quarters.length-1) ? 'See more' : 'No more to show';
+  moreBtn.disabled = end >= quarters.length-1;
+  moreBtn.onclick = () => {
+    state._qRenderedEnd = Math.min(end + 1, quarters.length-1);
+    renderInlineQuarterList(); // re-render including the newly appended quarter
+  };
+  moreWrap.appendChild(moreBtn);
+  mount.appendChild(moreWrap);
+}
+
+// Render one quarter section: title + 3 month cards in ov-grid
+function renderQuarterSection(quarter, mount){
+  const title = document.createElement('div');
+  title.className = 'inline-title';
+  title.textContent = quarter.label;
+  mount.appendChild(title);
+
+  const grid = document.createElement('div');
+  grid.className = 'ov-grid';
+
+  quarter.months.forEach(ym => {
+    const weeks = state.monthWeeks.get(ym) || []; // may be empty
+    const card = document.createElement('div'); card.className = 'mcard';
+
+    const head = document.createElement('div'); head.className = 'mhead';
+    const name = document.createElement('div'); name.className = 'mname'; name.textContent = monthTitleFromYM(ym);
+    head.appendChild(name); card.appendChild(head);
+
+    const list = document.createElement('div'); list.className = 'weeks';
+
+    if (!weeks.length){
+      const empty = document.createElement('div');
+      empty.className = 'notice';
+      empty.textContent = 'No weeks to show.';
+      list.appendChild(empty);
+    } else {
       weeks.forEach(w => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'week-pill';
         btn.textContent = `${formatWeekLabel(w.startISO)} — Wk ${w.weekNum}`;
-  
+
         const monKey = w.startISO.slice(0,10);
         if (!w.selectable) {
           btn.classList.add('disabled');
@@ -1956,154 +2019,144 @@
         }
         list.appendChild(btn);
       });
-  
-      card.appendChild(list);
-      grid.appendChild(card);
-    });
-  
-    // if quarter had zero months with weeks, say so
-    if (!grid.childElementCount) {
-      const empty = document.createElement('div');
-      empty.className = 'notice';
-      empty.textContent = 'No weeks in this quarter.';
-      mount.appendChild(empty);
-    } else {
-      mount.appendChild(grid);
     }
-  }
-  
-  // show a week below the cards (replaces the cards)
-  function openWeekInline(mondayKey) {
-    state.currentWeek = mondayKey; // keep existing state tidy
-    const mount = document.getElementById('landingInline');
-    if (!mount) return;
-  
-    mount.innerHTML = '';
-    showLoading('Loading this week…');
-  
-    ensureWeekLoaded(mondayKey).then(payload => {
+
+    card.appendChild(list);
+    grid.appendChild(card);
+  });
+
+  mount.appendChild(grid);
+}
+
+// Show a week inline (replaces the cards area); Back restores the list as expanded
+function openWeekInline(mondayKey){
+  state.currentWeek = mondayKey;
+  const mount = document.getElementById('landingInline');
+  if (!mount) return;
+
+  mount.innerHTML = '';
+  showLoading('Loading this week…');
+  ensureWeekLoaded(mondayKey)
+    .then(payload => {
       renderWeekInline(payload, mondayKey);
       prefetchNeighbors(mondayKey);
-    }).catch(err => {
-      alert('Failed to load week.\n' + (err?.message || err));
-    }).finally(() => hideLoading());
-  }
-  
-  function renderWeekInline(payload, mondayKey) {
-    const mount = document.getElementById('landingInline');
-    if (!mount) return;
-  
-    const wrap = document.createElement('div');
-    wrap.className = 'week-wrap';
-  
-    // header
-    const head = document.createElement('div');
-    head.className = 'week-head';
-  
-    const back = document.createElement('button');
-    back.className = 'nav-btn';
-    back.textContent = '← Back to quarter';
-    back.onclick = () => renderQuarterAtIndex(state._qIndex);
-  
-    const title = document.createElement('div');
-    title.className = 'week-title';
-    const d = new Date(mondayKey + 'T00:00:00Z');
-    title.textContent = `${d.toLocaleString('en-GB', { month: 'long', year: 'numeric' })} • Week ${isoWeekNumberFromKey(mondayKey)}`;
-  
-    const nextPrevWrap = document.createElement('div');
-    nextPrevWrap.style.display = 'flex';
-    nextPrevWrap.style.gap = '8px';
-  
-    const prevBtn = document.createElement('button');
-    prevBtn.className = 'nav-btn';
-    prevBtn.textContent = '←';
-    prevBtn.onclick = () => openWeekInline(plusDaysKey(mondayKey, -7));
-  
-    const nextBtn = document.createElement('button');
-    nextBtn.className = 'nav-btn';
-    nextBtn.textContent = '→';
-    nextBtn.onclick = () => openWeekInline(plusDaysKey(mondayKey, 7));
-  
-    nextPrevWrap.append(prevBtn, nextBtn);
-    head.append(back, title, nextPrevWrap);
-    wrap.appendChild(head);
-  
-    // grid
-    const grid = document.createElement('div');
-    grid.className = 'grid';
-  
-    const gh = document.createElement('div');
-    gh.className = 'grid-header';
-    gh.innerHTML = '<div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>';
-    grid.appendChild(gh);
-  
-    const daysEl = document.createElement('div');
-    daysEl.className = 'days';
-  
-    // same slot layout logic as your renderWeek(), but self-contained
-    const days = weekDaysFromMondayKey(mondayKey);
-    const today = todayKey(state.tz);
-    const byDay = new Map(days.map(k => [k, []]));
-  
-    (payload.slotsParsed || []).forEach(s => {
-      const key = ymdKey(s.start, state.tz);
-      if (byDay.has(key)) byDay.get(key).push(s);
+    })
+    .catch(err => alert('Failed to load week.\n' + (err?.message || err)))
+    .finally(hideLoading);
+}
+
+function renderWeekInline(payload, mondayKey){
+  const mount = document.getElementById('landingInline');
+  if (!mount) return;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'week-wrap';
+
+  const head = document.createElement('div');
+  head.className = 'week-head';
+
+  const back = document.createElement('button');
+  back.className = 'nav-btn';
+  back.textContent = '← Back to results';
+  back.onclick = () => renderInlineQuarterList();  // restore all currently shown quarters
+
+  const title = document.createElement('div');
+  title.className = 'week-title';
+  const d = new Date(mondayKey + 'T00:00:00Z');
+  title.textContent = `${d.toLocaleString('en-GB', { month: 'long', year: 'numeric' })} • Week ${isoWeekNumberFromKey(mondayKey)}`;
+
+  const nextPrev = document.createElement('div');
+  nextPrev.style.display = 'flex';
+  nextPrev.style.gap = '8px';
+
+  const prevBtn = document.createElement('button');
+  prevBtn.className = 'nav-btn';
+  prevBtn.textContent = '←';
+  prevBtn.onclick = () => openWeekInline(plusDaysKey(mondayKey, -7));
+
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'nav-btn';
+  nextBtn.textContent = '→';
+  nextBtn.onclick = () => openWeekInline(plusDaysKey(mondayKey, 7));
+
+  nextPrev.append(prevBtn, nextBtn);
+  head.append(back, title, nextPrev);
+  wrap.appendChild(head);
+
+  // grid (same logic as your renderWeek)
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  const gh = document.createElement('div');
+  gh.className = 'grid-header';
+  gh.innerHTML = '<div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>';
+  grid.appendChild(gh);
+
+  const daysEl = document.createElement('div');
+  daysEl.className = 'days';
+
+  const days = weekDaysFromMondayKey(mondayKey);
+  const today = todayKey(state.tz);
+  const byDay = new Map(days.map(k => [k, []]));
+
+  (payload.slotsParsed || []).forEach(s => {
+    const key = ymdKey(s.start, state.tz);
+    if (byDay.has(key)) byDay.get(key).push(s);
+  });
+  days.forEach(k => byDay.get(k).sort((a,b)=>a.start-b.start));
+
+  days.forEach(dayKey => {
+    const inPast = dayKey < today;
+    const dNum = Number(dayKey.slice(-2));
+    const col = document.createElement('div');
+    col.className = 'day' + (inPast ? ' past' : '');
+
+    const header = document.createElement('div');
+    header.className = 'day-header';
+    const dateEl = document.createElement('div');
+    dateEl.className = 'date';
+    dateEl.textContent = dNum;
+    header.appendChild(dateEl);
+    col.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'day-body';
+
+    const items = byDay.get(dayKey) || [];
+    items.forEach(slot => {
+      const iso = slot.start.toISOString();
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'pill';
+
+      const icon = document.createElement('span'); icon.className = 'icon'; icon.textContent = '○';
+      const label = document.createElement('span'); label.className = 'label';
+      label.textContent = `${tzTimeHM(slot.start, state.tz)} – ${tzTimeHM(slot.end, state.tz)}`;
+      pill.append(icon, label);
+
+      pill.onclick = () => {
+        pill.classList.add('selected'); icon.textContent = '✓';
+        openConfirmModal(iso, slot);
+      };
+
+      body.appendChild(pill);
     });
-    days.forEach(k => byDay.get(k).sort((a, b) => a.start - b.start));
-  
-    days.forEach(dayKey => {
-      const inPast = dayKey < today;
-      const dNum = Number(dayKey.slice(-2));
-      const col = document.createElement('div');
-      col.className = 'day' + (inPast ? ' past' : '');
-  
-      const header = document.createElement('div');
-      header.className = 'day-header';
-      const dateEl = document.createElement('div');
-      dateEl.className = 'date';
-      dateEl.textContent = dNum;
-      header.appendChild(dateEl);
-      col.appendChild(header);
-  
-      const body = document.createElement('div');
-      body.className = 'day-body';
-  
-      const items = byDay.get(dayKey) || [];
-      items.forEach(slot => {
-        const iso = slot.start.toISOString();
-        const pill = document.createElement('button');
-        pill.type = 'button';
-        pill.className = 'pill';
-  
-        const icon = document.createElement('span'); icon.className = 'icon'; icon.textContent = '○';
-        const label = document.createElement('span'); label.className = 'label';
-        label.textContent = `${tzTimeHM(slot.start, state.tz)} – ${tzTimeHM(slot.end, state.tz)}`;
-        pill.append(icon, label);
-  
-        pill.onclick = () => {
-          // single-select flow keeps your existing confirm modal UX
-          pill.classList.add('selected'); icon.textContent = '✓';
-          openConfirmModal(iso, slot);
-        };
-  
-        body.appendChild(pill);
-      });
-  
-      col.appendChild(body);
-      daysEl.appendChild(col);
-    });
-  
-    grid.appendChild(daysEl);
-    wrap.appendChild(grid);
-  
-    const meta = document.createElement('div');
-    meta.className = 'notice';
-    meta.textContent = `Found ${payload.exactCount || 0} slot${(payload.exactCount || 0) === 1 ? '' : 's'}.`;
-    wrap.appendChild(meta);
-  
-    mount.innerHTML = '';
-    mount.appendChild(wrap);
-  }
+
+    col.appendChild(body);
+    daysEl.appendChild(col);
+  });
+
+  grid.appendChild(daysEl);
+  wrap.appendChild(grid);
+
+  const meta = document.createElement('div');
+  meta.className = 'notice';
+  meta.textContent = `Found ${payload.exactCount || 0} slot${(payload.exactCount || 0) === 1 ? '' : 's'}.`;
+  wrap.appendChild(meta);
+
+  mount.innerHTML = '';
+  mount.appendChild(wrap);
+}
+
 
   function setStepCard(el, {state, title, body, onClick, showRebook, extraClass}) {
     el.classList.remove('active','locked','inactive','booked');
