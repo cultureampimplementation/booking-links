@@ -1730,13 +1730,9 @@ function generateWeeksForCurrentQuarter({
           }
         }
     
-        // how far ahead to show (default: 12 months ≈ 52 weeks)
-        const monthsAhead = Number(state.meta?.options?.monthsAhead ?? 12);
-        const weeksAhead  = Math.min(52, Math.ceil(monthsAhead * 4.35)); // cap at ~1 year
-        
-        const localWeeks = generateWeeksLocally({
+        // Show the full *current* quarter (past weeks will be present but disabled)
+        const localWeeks = generateWeeksForCurrentQuarter({
           initialTz: opts.initialTz || 'UTC',
-          weeks: weeksAhead,                         // <<< was current quarter only
           minNoticeDays: opts.minNoticeDays,
           weekdaysCSV:  opts.weekdaysCSV,
           blackoutDatesCSV: opts.blackoutDatesCSV
