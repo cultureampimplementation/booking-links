@@ -2540,13 +2540,6 @@ function ensureStateShape(){
   if (!Array.isArray(state.stateJSON.agenda.items)) state.stateJSON.agenda.items = [];
 }
 
-let agendaDirty = false;
-function markDirty(){
-  agendaDirty = true;
-  const btn = document.getElementById('agendaSaveBtn');
-  if (btn) btn.disabled = false;
-}
-
 async function saveSnapshot(){
   ensureStateShape();
   const btn = document.getElementById('s2DoneBtn');
