@@ -1819,26 +1819,6 @@ function renderAgenda(){
   };
 
   /**********************
-   * TZ select populate
-   **********************/
-  function populateTzSelect(zones, initial) {
-    tzSel.innerHTML = '';
-    (zones || []).forEach(z => {
-      const opt = document.createElement('option');
-      opt.value = z; opt.textContent = z;
-      if (z === initial) opt.selected = true;
-      tzSel.appendChild(opt);
-    });
-    state.tz = initial || state.tz || 'UTC';
-    tzSel.onchange = () => {
-      state.tz = tzSel.value;
-      if (state.currentWeek && state.weekCache.has(state.currentWeek)) {
-        renderWeek(state.weekCache.get(state.currentWeek));
-      }
-    };
-  }
-
-  /**********************
    * Boot
    **********************/
   function init() {
@@ -2789,6 +2769,75 @@ function isBlank(val) {
   if (Array.isArray(val)) return val.length === 0;
   if (typeof val === 'string') return val.trim() === '';
   return false;
+}
+
+// near top
+const TZ_STORE_KEY = 'bookinglinks_tz';
+
+// robust GMT offset for a zone "now"
+function tzOffsetMinutes(tz, at = new Date()){
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hour12: false,
+    year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', second:'2-digit'
+  });
+  const parts = Object.fromEntries(dtf.formatToParts(at).map(p => [p.type, p.value]));
+  const asUTC = Date.UTC(+parts.year, +parts.month-1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+  // difference between "time in that tz" and actual UTC => offset (mins)
+  return Math.round((asUTC - at.getTime())/60000);
+}
+function fmtOffset(mins){
+  const sign = mins >= 0 ? '+' : '-';
+  const a = Math.abs(mins);
+  const h = String(Math.floor(a/60)).padStart(2,'0');
+  const m = String(a%60).padStart(2,'0');
+  return `GMT${sign}${h}:${m}`;
+}
+
+function buildTzList(baseList){
+  const seen = new Set();
+  const zones = (baseList || []).filter(z => {
+    if (!z || seen.has(z)) return false; seen.add(z); return true;
+  });
+  // ensure the browser tz is present
+  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  if (!seen.has(browserTz)) zones.unshift(browserTz);
+  // sort by current offset, then name
+  const now = new Date();
+  return zones
+    .map(z => ({ z, off: tzOffsetMinutes(z, now) }))
+    .sort((a,b) => a.off - b.off || a.z.localeCompare(b.z));
+}
+
+// replace your populateTzSelect with this
+function populateTzSelect(zonesFromServer, initialGuess) {
+  const stored = localStorage.getItem(TZ_STORE_KEY);
+  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const initial = stored || initialGuess || browserTz;
+
+  const list = buildTzList(zonesFromServer && zonesFromServer.length ? zonesFromServer : timezones);
+  tzSel.innerHTML = '';
+
+  list.forEach(({z, off}) => {
+    const opt = document.createElement('option');
+    opt.value = z;
+    opt.textContent = `${fmtOffset(off)} — ${z}`;
+    if (z === initial) opt.selected = true;
+    tzSel.appendChild(opt);
+  });
+
+  state.tz = initial;
+
+  tzSel.onchange = () => {
+    state.tz = tzSel.value;
+    localStorage.setItem(TZ_STORE_KEY, state.tz);
+    // live re-render where needed
+    if (!overviewView.classList.contains('hide')) renderOverview();
+    else if (state.currentWeek && state.weekCache.has(state.currentWeek)) renderWeek(state.weekCache.get(state.currentWeek));
+    const inline = document.getElementById('landingInline');
+    if (inline && inline.children.length) renderInlineQuarterList();
+    updateSaveUI(); // keeps “last saved at …” in the right tz
+  };
 }
 
 
