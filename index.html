@@ -330,16 +330,6 @@
   
   <h1 class="hide">Pick meeting times</h1>
 
-  <div class="controls hide">
-    <div class="tabs">
-      <div class="tab active" id="tabOverview">Overview</div>
-      <div class="tab" id="tabWeek">Week</div>
-    </div>
-
-    <label for="tz">Timezone:</label>
-    <select id="tz"></select>
-  </div>
-
   <div class="notice" id="notice">
     Pick up a week, and we’ll search 
     <span id="colleagueName"></span>’s calendar for availability - including enough time for their preparation.
@@ -627,7 +617,14 @@ function generateWeeksForCurrentQuarter({
    * State & DOM refs
    **********************/
   let initialTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  let timezones = ['UTC', 'Europe/Berlin', 'Europe/London', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Australia/Sydney'];
+  let timezones = [
+  'UTC',
+  'Europe/London','Europe/Berlin','Europe/Paris','Europe/Amsterdam','Europe/Madrid',
+  'America/New_York','America/Chicago','America/Denver','America/Los_Angeles','America/Toronto',
+  'America/Sao_Paulo','Asia/Dubai','Asia/Kolkata','Asia/Singapore','Asia/Hong_Kong','Asia/Tokyo',
+  'Australia/Sydney','Pacific/Auckland'
+  ];
+
   let MAX_SELECT = 1;
 
   const state = {
@@ -661,10 +658,9 @@ function generateWeeksForCurrentQuarter({
 
   let pendingWeekKey = null;
 
-  const tzSel = document.getElementById('tz');
+  
   const crumb = document.getElementById('crumb');
-  const tabOverview = document.getElementById('tabOverview');
-  const tabWeek = document.getElementById('tabWeek');
+  
   const overviewView = document.getElementById('overviewView');
   const ovGrid = document.getElementById('ovGrid');
   const weekView = document.getElementById('weekView');
@@ -1752,30 +1748,6 @@ function renderAgenda(){
   /**********************
    * Events & wiring
    **********************/
-  tzSel.addEventListener('change', () => {
-    state.tz = tzSel.value;
-    if (!overviewView.classList.contains('hide')) {
-      renderOverview();
-    } else if (state.currentWeek && state.weekCache.has(state.currentWeek)) {
-      renderWeek(state.weekCache.get(state.currentWeek));
-    }
-    // ⬇️ new: if inline section is visible, refresh it
-    const inline = document.getElementById('landingInline');
-    if (inline && inline.children.length) renderInlineQuarterList();
-  });
-
-
-  tabOverview.onclick = renderOverview;
-  tabWeek.onclick = () => {
-    if (!state.currentWeek) {
-      const months = [...state.monthWeeks.keys()].sort();
-      if (months.length) {
-        const wk = state.monthWeeks.get(months[0])?.[0];
-        if (wk) return openWeek(String(wk.startISO).slice(0,10));
-      }
-    }
-    if (state.currentWeek) openWeek(state.currentWeek);
-  };
 
   prevWeekBtn.onclick = () => {
     if (!state.currentWeek) return;
@@ -2352,7 +2324,7 @@ function renderWeekInline(payload, mondayKey){
 
   const back = document.createElement('button');
   back.className = 'nav-btn';
-  back.textContent = '← Back to results';
+  back.textContent = '← Back to weeks';
   back.onclick = () => { 
   closeConfirmModal(true);   
   renderInlineQuarterList();
@@ -2362,6 +2334,7 @@ function renderWeekInline(payload, mondayKey){
   title.className = 'week-title';
   const d = new Date(mondayKey + 'T00:00:00Z');
   title.textContent = `${d.toLocaleString('en-GB', { month: 'long', year: 'numeric' })} • Week ${isoWeekNumberFromKey(mondayKey)}`;
+  const tzPicker = makeInlineTzPicker({ mondayKey });
 
   const nextPrev = document.createElement('div');
   nextPrev.style.display = 'flex';
@@ -2807,6 +2780,59 @@ function populateTzSelect(zonesFromServer, initialGuess) {
   };
 }
 
+function tzOffsetLabel(zone, refDate = new Date()) {
+  // Offset (mins) for zone at refDate
+  const utc = new Date(Date.UTC(
+    refDate.getUTCFullYear(), refDate.getUTCMonth(), refDate.getUTCDate(),
+    refDate.getUTCHours(), refDate.getUTCMinutes(), refDate.getUTCSeconds()
+  ));
+  const zoned = new Date(refDate.toLocaleString('en-US', { timeZone: zone }));
+  const offMin = Math.round((zoned - utc) / 60000);
+  const sign = offMin >= 0 ? '+' : '-';
+  const hh = String(Math.floor(Math.abs(offMin) / 60)).padStart(2, '0');
+  const mm = String(Math.abs(offMin) % 60).padStart(2, '0');
+  return `GMT${sign}${hh}:${mm} — ${zone}`;
+}
+
+function makeInlineTzPicker({ mondayKey }) {
+  const ref = new Date(mondayKey + 'T12:00:00Z'); // middle of the week -> DST-correct label
+  const wrap = document.createElement('div');
+  wrap.style.display = 'flex';
+  wrap.style.alignItems = 'center';
+  wrap.style.gap = '6px';
+  wrap.style.marginLeft = '12px';
+
+  const lab = document.createElement('span');
+  lab.textContent = 'Timezone:';
+  lab.style.fontSize = '12px';
+  lab.style.color = '#555';
+
+  const sel = document.createElement('select');
+  sel.style.padding = '4px 6px';
+  sel.style.fontSize = '12px';
+  sel.style.borderRadius = '6px';
+
+  sel.innerHTML = '';
+  timezones.forEach(z => {
+    const opt = document.createElement('option');
+    opt.value = z;                         // VALUE = IANA ID
+    opt.textContent = tzOffsetLabel(z, ref);
+    if (z === (state.tz || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')) {
+      opt.selected = true;
+    }
+    sel.appendChild(opt);
+  });
+
+  sel.addEventListener('change', () => {
+    state.tz = sel.value;                  // IANA id
+    // re-render the SAME inline week with the new tz
+    const payload = state.weekCache.get(mondayKey);
+    if (payload) renderWeekInline(payload, mondayKey);
+  });
+
+  wrap.append(lab, sel);
+  return wrap;
+}
 
   // Kick things off:
   init();
