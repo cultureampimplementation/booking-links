@@ -1386,14 +1386,27 @@ function renderWeek(payload) {
   
     if (s2Sub){
       s2Sub.style.display = 'none';
+      s2Sub.classList.remove('prep-card'); // reset before (re)applying
+    
       if (hasQs && hasPrep){
         const ps = slot.prep.start;
         const startTime = fmtTimeLocal(ps, state.tz).replace(':','h');
-        s2Sub.textContent =
-          "We've held a preparation slot for ... on ${fmtDateLocal(ps)} at ${startTime}. Answering the questions below will help them in their preparations.";
+    
+        s2Sub.classList.add('prep-card');
+        s2Sub.innerHTML = `
+          <strong>
+            We've held a preparation slot for ${colleagueName} on ${fmtDateLocal(ps, state.tz)} at ${startTime}.
+            Answering the questions below will help them in their preparations.
+          </strong>
+        `;
         s2Sub.style.display = '';
       } else if (hasQs && !hasPrep){
-        s2Sub.textContent = `Answering the questions below will help them in their preparation.`;
+        s2Sub.classList.add('prep-card');
+        s2Sub.innerHTML = `
+          <strong>
+            Answering the questions below will help them in their preparation.
+          </strong>
+        `;
         s2Sub.style.display = '';
       }
     }
