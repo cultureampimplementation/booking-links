@@ -285,11 +285,6 @@
 
     <label for="tz">Timezone:</label>
     <select id="tz"></select>
-
-    <div class="cart">
-      <span class="badge" id="cartCount" title="View your selections">0 selected</span>
-      <button class="btn" id="submitBtn" disabled>Book it in!</button>
-    </div>
   </div>
 
   <div class="notice" id="notice">
@@ -356,24 +351,6 @@
       <div id="s2Questions" class="notice" style="margin-top:12px;"></div>
       <footer style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
         <button class="btn" id="s2DoneBtn" disabled>Done</button>
-      </footer>
-    </div>
-  </div>
-
-  <!-- CART MODAL -->
-  <div class="modal-backdrop" id="cartModal">
-    <div class="modal">
-      <header>
-        <h3>Your selections</h3>
-        <button class="link-btn" id="closeCart">Close</button>
-      </header>
-      <div class="content">
-        <div class="sel-list" id="selList"></div>
-        <div id="emptyCartNote" class="notice hide">No selections yet.</div>
-      </div>
-      <footer>
-        <button class="link-btn" id="clearAll">Clear all</button>
-        <button class="btn" id="modalSubmit">Submit selection</button>
       </footer>
     </div>
   </div>
@@ -598,7 +575,6 @@ function generateWeeksForCurrentQuarter({
     monthWeeks: new Map(),
     currentWeek: null,
     weekCache: new Map(),
-    cart: [],
     suggestedInvitees: [],
     preselectedCustomerEmails: [],
     confirmQuestions: [],    
@@ -625,8 +601,6 @@ function generateWeeksForCurrentQuarter({
 
   const tzSel = document.getElementById('tz');
   const crumb = document.getElementById('crumb');
-  const submitBtn = document.getElementById('submitBtn');
-  const cartCount = document.getElementById('cartCount');
   const tabOverview = document.getElementById('tabOverview');
   const tabWeek = document.getElementById('tabWeek');
   const overviewView = document.getElementById('overviewView');
@@ -638,12 +612,6 @@ function generateWeeksForCurrentQuarter({
   const nextWeekBtn = document.getElementById('nextWeek');
   const weekMetaEl = document.getElementById('weekMeta');
   const emptyWeekBanner = document.getElementById('emptyWeekBanner');
-  const cartModal = document.getElementById('cartModal');
-  const selList = document.getElementById('selList');
-  const emptyCartNote = document.getElementById('emptyCartNote');
-  const closeCart = document.getElementById('closeCart');
-  const clearAll = document.getElementById('clearAll');
-  const modalSubmit = document.getElementById('modalSubmit');
   const loadingModal = document.getElementById('loadingModal');
   const loadingMsg = document.getElementById('loadingMsg');
   const confirmModal = document.getElementById('confirmModal');
@@ -981,84 +949,67 @@ function generateWeeksForCurrentQuarter({
     }).catch(()=>{});
   }
 
-  function renderWeek(payload) {
-    setWeekHeader(state.currentWeek);
+function renderWeek(payload) {
+  setWeekHeader(state.currentWeek);
 
-    const days = weekDaysFromMondayKey(state.currentWeek);
-    const today = todayKey(state.tz);
-    const byDay = new Map(days.map(k => [k, []]));
-    payload.slotsParsed.forEach(s => {
-      const key = ymdKey(s.start, state.tz);
-      if (byDay.has(key)) byDay.get(key).push(s);
-    });
-    days.forEach(k => byDay.get(k).sort((a, b) => a.start - b.start));
+  const days = weekDaysFromMondayKey(state.currentWeek);
+  const today = todayKey(state.tz);
+  const byDay = new Map(days.map(k => [k, []]));
+  payload.slotsParsed.forEach(s => {
+    const key = ymdKey(s.start, state.tz);
+    if (byDay.has(key)) byDay.get(key).push(s);
+  });
+  days.forEach(k => byDay.get(k).sort((a, b) => a.start - b.start));
 
-    weekDaysEl.innerHTML = '';
-    days.forEach(dayKey => {
-      const inPast = dayKey < today;
-      const dNum = Number(dayKey.slice(-2));
-      const col = document.createElement('div');
-      col.className = 'day' + (inPast ? ' past' : '');
-      const header = document.createElement('div'); header.className = 'day-header';
-      const dateEl = document.createElement('div'); dateEl.className = 'date'; dateEl.textContent = dNum;
-      header.appendChild(dateEl); col.appendChild(header);
+  weekDaysEl.innerHTML = '';
+  days.forEach(dayKey => {
+    const inPast = dayKey < today;
+    const dNum = Number(dayKey.slice(-2));
+    const col = document.createElement('div');
+    col.className = 'day' + (inPast ? ' past' : '');
+    const header = document.createElement('div'); header.className = 'day-header';
+    const dateEl = document.createElement('div'); dateEl.className = 'date'; dateEl.textContent = dNum;
+    header.appendChild(dateEl); col.appendChild(header);
 
-      const body = document.createElement('div'); body.className = 'day-body';
-      const items = byDay.get(dayKey) || [];
-      items.forEach(slot => {
-        const iso = slot.start.toISOString();
-        const pill = document.createElement('button');
-        pill.type = 'button';
-        const selected = state.cart.includes(iso);
-        pill.className = 'pill' + (selected ? ' selected' : '');
+    const body = document.createElement('div'); body.className = 'day-body';
+    const items = byDay.get(dayKey) || [];
+    items.forEach(slot => {
+      const iso = slot.start.toISOString();
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'pill';
 
-        const icon = document.createElement('span'); icon.className = 'icon'; icon.textContent = selected ? '✓' : '○';
-        const label = document.createElement('span'); label.className = 'label';
-        label.textContent = `${tzTimeHM(slot.start, state.tz)} – ${tzTimeHM(slot.end, state.tz)}`;
-        pill.append(icon, label);
+      const icon = document.createElement('span'); icon.className = 'icon'; icon.textContent = '○';
+      const label = document.createElement('span'); label.className = 'label';
+      label.textContent = `${tzTimeHM(slot.start, state.tz)} – ${tzTimeHM(slot.end, state.tz)}`;
+      pill.append(icon, label);
 
-        pill.onclick = () => {
-          if (MAX_SELECT === 1) {
-            if (pendingPill && pendingPill !== pill) {
-              pendingPill.classList.remove('selected');
-              const prevIcon = pendingPill.querySelector('.icon'); if (prevIcon) prevIcon.textContent = '○';
-            }
-            pill.classList.add('selected'); icon.textContent = '✓';
-            pendingIso = iso; pendingPill = pill;
-          
-            document.querySelectorAll('.pill.selected').forEach(el => {
-              if (el !== pill) {
-                el.classList.remove('selected');
-                const ic = el.querySelector('.icon'); if (ic) ic.textContent = '○';
-              }
-            });
-          
-            openConfirmModal(iso, slot);
-            return;
+      pill.onclick = () => {
+        // single-select: visually mark the current one
+        document.querySelectorAll('.pill.selected').forEach(el => {
+          if (el !== pill) {
+            el.classList.remove('selected');
+            const ic = el.querySelector('.icon'); if (ic) ic.textContent = '○';
           }
-          const isSelected = state.cart.includes(iso);
-          if (isSelected) {
-            state.cart = state.cart.filter(x => x !== iso);
-            pill.classList.remove('selected'); icon.textContent = '○';
-          } else {
-            if (state.cart.length >= MAX_SELECT) { alert(`You can pick up to ${MAX_SELECT}.`); return; }
-            state.cart.push(iso);
-            pill.classList.add('selected'); icon.textContent = '✓';
-          }
-          setCartBadge();
-        };
+        });
+        pill.classList.add('selected'); icon.textContent = '✓';
+        pendingIso = iso;
+        pendingPill = pill;
+        openConfirmModal(iso, slot);
+      };
 
-        body.appendChild(pill);
-      });
-
-      col.appendChild(body);
-      weekDaysEl.appendChild(col);
+      body.appendChild(pill);
     });
 
-    emptyWeekBanner.classList.toggle('hide', (payload.exactCount || 0) > 0);
-    weekMetaEl.textContent = `Found ${payload.exactCount || 0} slot${(payload.exactCount || 0) === 1 ? '' : 's'}.`;
-    hideLoading();
-  }
+    col.appendChild(body);
+    weekDaysEl.appendChild(col);
+  });
+
+  emptyWeekBanner.classList.toggle('hide', (payload.exactCount || 0) > 0);
+  weekMetaEl.textContent = `Found ${payload.exactCount || 0} slot${(payload.exactCount || 0) === 1 ? '' : 's'}.`;
+  hideLoading();
+}
+
 
   /**********************
    * Confirm modal
@@ -1237,14 +1188,12 @@ function generateWeeksForCurrentQuarter({
     confirmBtn.classList.remove('success', 'error');
 
     confirmModal.style.display = 'flex';
-
     confirmBtn.onclick = async () => {
       if (confirmDraft.selected.size === 0) {
         alert('Please add at least one attendee email.');
         return;
       }
     
-      // proceed with booking...
       confirmBtn.disabled = true;
       confirmBtn.textContent = 'Booking…';
     
@@ -1256,38 +1205,37 @@ function generateWeeksForCurrentQuarter({
       state.preselectedCustomerEmails = preselectedCustomerEmails.slice();
     
       const explicitCustomerEmails = Array.from(confirmDraft.selected);
-
       const preferredPrep =
-      (slot && slot.prep)
-        ? { start: slot.prep.start.toISOString(), end: slot.prep.end.toISOString() }
-        : undefined;
-
-          const extra = {
-            explicitCustomerEmails,
-            ...(preferredPrep ? { [iso]: preferredPrep } : {})
-          };
-        
-          apiPost('reserveSlots', { token }, { 
-           slots: [iso], 
-          extra 
-        })
-        .then(() => {
-          confirmBtn.classList.add('success');
-          confirmBtn.textContent = 'Booked!';
-          renderStep2FromSlot(slot);
-          refreshLandingCards();
-          setTimeout(() => {
-            confirmModal.style.display = 'none';
-            pendingIso = null; pendingPill = null;
-          }, 900);
-        })
-        .catch(err => {
-          confirmBtn.classList.add('error');
-          confirmBtn.textContent = 'Try again';
-          alert(err && err.message ? err.message : String(err));
-          confirmBtn.disabled = false;
-        });
+        (slot && slot.prep)
+          ? { start: slot.prep.start.toISOString(), end: slot.prep.end.toISOString() }
+          : undefined;
+      const extra = {
+        explicitCustomerEmails,
+        ...(preferredPrep ? { [iso]: preferredPrep } : {})
+      };
+    
+      runBlocking(
+        () => apiPost('reserveSlots', { token }, { slots: [iso], extra }),
+        { startMsg: 'Booking your time…', slowMsg: 'Still working… calendars can be slow.' }
+      )
+      .then(() => {
+        confirmBtn.classList.add('success');
+        confirmBtn.textContent = 'Booked!';
+        renderStep2FromSlot(slot);
+        refreshLandingCards();
+        setTimeout(() => {
+          confirmModal.style.display = 'none';
+          pendingIso = null; pendingPill = null;
+        }, 900);
+      })
+      .catch(err => {
+        confirmBtn.classList.add('error');
+        confirmBtn.textContent = 'Try again';
+        alert(err && err.message ? err.message : String(err));
+        confirmBtn.disabled = false;
+      });
     };
+
   }
 
   function closeConfirmModal(revertIfAny = true) {
@@ -1447,75 +1395,6 @@ function generateWeeksForCurrentQuarter({
   }
 
 
-  /**********************
-   * Cart (multi-select)
-   **********************/
-  function setCartBadge() {
-    if (MAX_SELECT === 1) return;
-    cartCount.textContent = `${state.cart.length} selected`;
-    submitBtn.disabled = state.cart.length === 0;
-  }
-  function openCartModal() {
-    selList.innerHTML = '';
-    if (state.cart.length === 0) {
-      emptyCartNote.classList.remove('hide');
-    } else {
-      emptyCartNote.classList.add('hide');
-      const allSlots = [];
-      for (const payload of state.weekCache.values()) allSlots.push(...payload.slotsParsed);
-      const items = state.cart
-        .map(iso => ({ iso, slot: allSlots.find(s => s.start.toISOString() === iso) }))
-        .filter(it => !!it.slot)
-        .sort((a, b) => a.slot.start - b.slot.start);
-
-      const fmtDate = new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
-      const fmtTime = new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, hour: '2-digit', minute: '2-digit', hour12: false });
-
-      items.forEach(it => {
-        const row = document.createElement('div'); row.className = 'sel-item';
-        const when = document.createElement('div'); when.className = 'when';
-        const dateStr = fmtDate.format(it.slot.start);
-        const timeStr = fmtTime.format(it.slot.start).replace(':', 'h') + '–' + fmtTime.format(it.slot.end).replace(':', 'h');
-        when.textContent = `${dateStr} • ${timeStr}`;
-        const rm = document.createElement('button'); rm.className = 'link-btn'; rm.textContent = 'Remove';
-        rm.onclick = () => {
-          state.cart = state.cart.filter(x => x !== it.iso);
-          setCartBadge();
-          if (state.currentWeek) {
-            const cur = state.weekCache.get(state.currentWeek);
-            if (cur) renderWeek(cur);
-          }
-          openCartModal();
-        };
-        row.append(when, rm);
-        selList.appendChild(row);
-      });
-    }
-    cartModal.style.display = 'flex';
-  }
-  function closeCartModal() { cartModal.style.display = 'none'; }
-
-  submitBtn.onclick = () => {
-    if (state.cart.length === 0) return;
-    submitBtn.disabled = true; submitBtn.textContent = 'Submitting…';
-    apiPost('reserveSlots', { token }, { slots: state.cart.slice(0, MAX_SELECT) })
-      .then(() => { submitBtn.classList.add('success'); submitBtn.textContent = 'Sent!'; closeCartModal(); })
-      .catch(err => { submitBtn.classList.add('error'); submitBtn.textContent = 'Try again'; alert((err && err.message) || String(err)); submitBtn.disabled = false; });
-  };
-  modalSubmit.onclick = () => { if (MAX_SELECT !== 1) submitBtn.click(); };
-  cartCount.onclick = () => { if (MAX_SELECT !== 1) openCartModal(); };
-  closeCart.onclick = closeCartModal;
-  cartModal.addEventListener('click', (e) => { if (e.target === cartModal) closeCartModal(); });
-  clearAll.onclick = () => {
-    if (!state.cart.length) return;
-    if (!confirm('Clear all selections?')) return;
-    state.cart = [];
-    setCartBadge();
-    const cur = state.weekCache.get(state.currentWeek);
-    if (cur) renderWeek(cur);
-    openCartModal();
-  };
-
   async function fetchWeekAtGranularity(mondayKey, g) {
     const res = await apiGet('fetchWeek', { token, mondayKey, g });
     console.log('[fetchWeek raw]', res);
@@ -1566,8 +1445,6 @@ function generateWeeksForCurrentQuarter({
     // ⬇️ new: if inline section is visible, refresh it
     const inline = document.getElementById('landingInline');
     if (inline && inline.children.length) renderInlineQuarterList();
-  
-    if (cartModal.style.display === 'flex') openCartModal();
   });
 
 
@@ -2299,6 +2176,17 @@ function renderWeekInline(payload, mondayKey){
       });
     }
   }
+
+  function runBlocking(promiseFactory, { startMsg="Working…", slowMsg="Still working… calendars can be slow.", slowAfterMs=5000 } = {}) {
+  showLoading(startMsg);
+  let slowTimer = setTimeout(() => { loadingMsg.textContent = slowMsg; }, slowAfterMs);
+  const clear = () => { clearTimeout(slowTimer); hideLoading(); };
+  return Promise.resolve()
+    .then(() => promiseFactory())
+    .then((v) => { clear(); return v; })
+    .catch((e) => { clear(); throw e; });
+}
+
 
 
   // Kick things off:
