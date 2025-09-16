@@ -1349,7 +1349,6 @@ function renderWeek(payload) {
   
     const doneBtn = document.getElementById('s2DoneBtn');
     doneBtn.textContent = 'Save';
-    doneBtn.disabled = !areRequiredQuestionsAnswered();
     doneBtn.onclick = () => {
       // only save if there is something to save; otherwise just show “Saved”
       if (agendaDirty || prepDirty){
@@ -1358,6 +1357,7 @@ function renderWeek(payload) {
         markClean();
       }
     };
+    updateSaveButton(); 
   }
 
 function renderStep2Questions(slot) {
@@ -2552,7 +2552,7 @@ async function saveSnapshot(){
   const btn = document.getElementById('s2DoneBtn');
   if (btn){
     btn.textContent = 'Saving…';
-    btn.disabled = true;
+    btn.disabled = true;  // temporary while saving, regardless of required/dirty
   }
   try{
     state.stateJSON.lastEditedAtISO = new Date().toISOString();
@@ -2562,6 +2562,7 @@ async function saveSnapshot(){
     console.warn('saveStateJSON failed', e);
     if (btn){ btn.textContent = 'Save (retry)'; btn.disabled = false; }
     alert('Could not save right now. Your changes are still visible locally.');
+    updateSaveButton();
   }
 }
 
