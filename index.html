@@ -617,13 +617,6 @@ function generateWeeksForCurrentQuarter({
    * State & DOM refs
    **********************/
   let initialTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  let timezones = [
-  'UTC',
-  'Europe/London','Europe/Berlin','Europe/Paris','Europe/Amsterdam','Europe/Madrid',
-  'America/New_York','America/Chicago','America/Denver','America/Los_Angeles','America/Toronto',
-  'America/Sao_Paulo','Asia/Dubai','Asia/Kolkata','Asia/Singapore','Asia/Hong_Kong','Asia/Tokyo',
-  'Australia/Sydney','Pacific/Auckland'
-  ];
 
   let MAX_SELECT = 1;
 
@@ -2862,6 +2855,22 @@ function makeInlineTzPicker({ mondayKey }) {
   wrap.append(lab, sel);
   return wrap;
 }
+
+// Curated default timezone list (used as fallback)
+const DEFAULT_TZS = [
+  'UTC',
+  'Europe/London','Europe/Dublin','Europe/Berlin','Europe/Paris','Europe/Amsterdam','Europe/Madrid',
+  'Europe/Rome','Europe/Zurich','Europe/Stockholm','Europe/Helsinki','Europe/Athens','Europe/Warsaw',
+  'Europe/Bucharest','Europe/Istanbul',
+  'Africa/Johannesburg',
+  'America/New_York','America/Toronto','America/Chicago','America/Denver','America/Los_Angeles',
+  'America/Vancouver','America/Phoenix','America/Mexico_City','America/Sao_Paulo',
+  'Asia/Dubai','Asia/Kolkata','Asia/Singapore','Asia/Hong_Kong','Asia/Shanghai','Asia/Tokyo','Asia/Seoul',
+  'Australia/Perth','Australia/Melbourne','Australia/Sydney','Pacific/Auckland'
+];
+
+// If you declared `let timezones = [...]` earlier, replace it with:
+let timezones = DEFAULT_TZS.slice();
 
 // Turn arrays of strings OR objects into a clean array of IANA IDs
 function normalizeTimezones(input) {
