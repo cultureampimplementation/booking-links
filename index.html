@@ -1856,10 +1856,9 @@ function renderAgenda(){
           weekdaysCSV: String(meta?.options?.weekdaysCSV || 'Mon,Tue,Wed,Thu,Fri'),
           blackoutDatesCSV: String(meta?.options?.blackoutDatesCSV || '')
         };
-    
-        if (Array.isArray(meta.timezones)) timezones = meta.timezones;
+  
         if (opts.initialTz) initialTz = opts.initialTz;
-        if (Array.isArray(meta.timezones)) timezones = meta.timezones;
+        if (meta.timezones) timezones = normalizeTimezones(meta.timezones);
       
         const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
         state.tz = localStorage.getItem(TZ_STORE_KEY)
@@ -2762,7 +2761,16 @@ function tzOffsetLabel(zone, refDate = new Date()) {
 }
 
 function makeInlineTzPicker({ mondayKey }) {
-  const ref = new Date(mondayKey + 'T12:00:00Z'); // middle of the week -> DST-correct label
+  const ref = new Date(mondayKey + 'T12:00:00Z'); // middle of the week -> DST-stable label
+
+  // Ensure we have a valid, de-duped, offset-sorted list
+  const baseList = normalizeTimezones(timezones);
+  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  if (!baseList.includes(browserTz)) baseList.unshift(browserTz);
+
+  // Sort by current offset then by name (reuse your helpers)
+  const list = buildTzList(baseList).map(x => x.z);
+
   const wrap = document.createElement('div');
   wrap.style.display = 'flex';
   wrap.style.alignItems = 'center';
@@ -2780,25 +2788,73 @@ function makeInlineTzPicker({ mondayKey }) {
   sel.style.borderRadius = '6px';
 
   sel.innerHTML = '';
-  timezones.forEach(z => {
-    const opt = document.createElement('option');
-    opt.value = z;                         // VALUE = IANA ID
-    opt.textContent = tzOffsetLabel(z, ref);
-    if (z === (state.tz || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')) {
-      opt.selected = true;
+  const current = state.tz || localStorage.getItem(TZ_STORE_KEY) || browserTz || 'UTC';
+
+  for (const z of list) {
+    let label;
+    try {
+      label = tzOffsetLabel(z, ref); // may throw if z somehow invalid
+    } catch {
+      continue; // skip bad entries defensively
     }
+    const opt = document.createElement('option');
+    opt.value = z;
+    opt.textContent = label;
+    if (z === current) opt.selected = true;
     sel.appendChild(opt);
-  });
+  }
+
+  // If somehow nothing rendered, add a minimal fallback
+  if (!sel.options.length) {
+    const z = 'UTC';
+    const opt = document.createElement('option');
+    opt.value = z;
+    opt.textContent = 'GMT+00:00 — UTC';
+    sel.appendChild(opt);
+  }
 
   sel.addEventListener('change', () => {
-    state.tz = sel.value;                  // IANA id
-    // re-render the SAME inline week with the new tz
+    state.tz = sel.value;
+    localStorage.setItem(TZ_STORE_KEY, state.tz);
+    // Re-render the SAME inline week with the new tz
     const payload = state.weekCache.get(mondayKey);
     if (payload) renderWeekInline(payload, mondayKey);
   });
 
   wrap.append(lab, sel);
   return wrap;
+}
+
+// Turn arrays of strings OR objects into a clean array of IANA IDs
+function normalizeTimezones(input) {
+  if (!input) return DEFAULT_TZS.slice();
+  let arr = Array.isArray(input) ? input.slice() : [];
+  arr = arr
+    .map(z => {
+      if (typeof z === 'string') return z.trim();
+      if (z && typeof z === 'object') {
+        // common field names people use
+        return (z.value || z.id || z.tz || z.zone || '').toString().trim();
+      }
+      return '';
+    })
+    .filter(Boolean);
+
+  // Dedup + validate (skip anything that throws in DateTimeFormat)
+  const seen = new Set();
+  const out = [];
+  for (const z of arr) {
+    if (seen.has(z)) continue;
+    try {
+      // Will throw if invalid zone
+      new Intl.DateTimeFormat('en-US', { timeZone: z }).format(new Date());
+      seen.add(z);
+      out.push(z);
+    } catch {
+      // skip bad tz
+    }
+  }
+  return out.length ? out : DEFAULT_TZS.slice();
 }
 
   // Kick things off:
