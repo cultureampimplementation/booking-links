@@ -623,11 +623,6 @@ function generateWeeksForCurrentQuarter({
     return call;
   }
 
-  const saveConfirmAnswerDebounced = debounce((key, value) => {
-    if (!key) return;
-    apiPost('saveConfirmAnswer', { token }, { key, value }).catch(console.error);
-  }, 400);
-
   /**********************
    * State & DOM refs
    **********************/
@@ -733,35 +728,10 @@ function generateWeeksForCurrentQuarter({
       .filter(s => !isNaN(s.start) && !isNaN(s.end));
   }
 
-  function makeQuantileBuckets(counts) { const arr = counts.filter(n => Number.isFinite(n)).slice().sort((a, b) => a - b); if (!arr.length) return [0, 0, 0, 0, 0]; const q = p => arr[Math.min(arr.length - 1, Math.floor(p * (arr.length - 1)))]; return [q(0.2), q(0.4), q(0.6), q(0.8), arr[arr.length - 1]]; }
-  function heatLevel(count, breaks) { if (count <= 0) return 0; const [q1, q2, q3, q4, _max] = breaks; if (count <= q1) return 1; if (count <= q2) return 2; if (count <= q3) return 3; if (count <= q4) return 4; return 5; }
-  function weekLabel(monKey) { const d = new Date(monKey + 'T00:00:00Z'); const mon = d.toLocaleString('en-GB', { month: 'short' }); return `Week of ${mon} ${d.getUTCDate()}${ordinal(d.getUTCDate())} — Wk ${isoWeekNumberFromKey(monKey)}`; }
-  function weekColorForValue(value, max) { if (!value || !max) return null; const gamma = 0.75; let t = Math.max(0, Math.min(1, value / max)); t = Math.pow(t, gamma); const palette = ['#faf5ff', '#f3e8ff', '#e9d5ff', '#d8b4fe', '#c084fc', '#a855f7', '#9333ea', '#7e22ce', '#6b21a8']; const idx = Math.min(palette.length - 1, Math.round(t * (palette.length - 1))); return palette[idx]; }
-  function needsLightText(hex) { if (!hex) return false; const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex); if (!m) return false; const r = parseInt(m[1], 16) / 255, g = parseInt(m[2], 16) / 255, b = parseInt(m[3], 16) / 255; const c = [r, g, b].map(x => x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4)); const L = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; return L < 0.58; }
   function ordinal(n) { const mod10 = n % 10, mod100 = n % 100; if (mod100 >= 11 && mod100 <= 13) return 'th'; switch (mod10) { case 1: return 'st'; case 2: return 'nd'; case 3: return 'rd'; default: return 'th'; } }
   function formatWeekLabel(startISO) { const d = new Date(startISO); const month = d.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' }); const day = d.getUTCDate(); return `Week of ${month} ${day}${ordinal(day)}`; }
   function isoWeekMonday(y, w) { const jan4 = new Date(Date.UTC(y, 0, 4)); const day = jan4.getUTCDay() || 7; const monW1 = new Date(jan4); monW1.setUTCDate(jan4.getUTCDate() - day + 1); const d = new Date(monW1); d.setUTCDate(monW1.getUTCDate() + (w - 1) * 7); return d; }
 
-  function groupWeeksFromObject(weeksObj) {
-    const weekTotals = new Map();
-    const monthWeeks = new Map();
-    for (const [rawKey, rawCnt] of Object.entries(weeksObj || {})) {
-      const m = String(rawKey).trim().match(/^(\d{4})-W(\d{1,2})$/);
-      if (!m) continue;
-      const y = +m[1], w = +m[2];
-      const wkKey = `${y}-W${String(w).padStart(2, '0')}`;
-      const count = Number(rawCnt) || 0;
-      weekTotals.set(wkKey, count);
-      const mon = isoWeekMonday(y, w);
-      if (isNaN(+mon)) continue;
-      const startISO = mon.toISOString();
-      const monthKey = startISO.slice(0, 7);
-      if (!monthWeeks.has(monthKey)) monthWeeks.set(monthKey, []);
-      monthWeeks.get(monthKey).push({ week: wkKey, weekNum: w, startISO, count });
-    }
-    for (const arr of monthWeeks.values()) arr.sort((a, b) => a.startISO.localeCompare(b.startISO));
-    return { weekTotals, monthWeeks };
-  }
     function fmtDateLocal(d, tz) {
       return new Intl.DateTimeFormat('en-GB', {
         timeZone: tz, weekday:'short', year:'numeric', month:'short', day:'numeric'
@@ -2624,9 +2594,6 @@ async function saveSnapshot(){
     if (btn){ btn.textContent = 'Save recent changes 💾'; btn.disabled = false; }
   }
 }
-
-// optional autosave (keep or remove)
-const saveSnapshotDebounced = makeDebounce(() => saveSnapshot().catch(()=>{}), 800);
 
 // ---- unified dirty tracking ----
 let agendaDirty = false;
