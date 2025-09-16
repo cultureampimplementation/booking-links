@@ -642,6 +642,10 @@ function generateWeeksForCurrentQuarter({
     lastPrep: null      // {start: Date, end: Date} | null
   };
 
+  // Whether the colleague (owner of this booking link) has a connected calendar
+  state.calendarAccessOk = true; // default; we’ll derive from meta at init
+
+
   // Shared working state for the confirm modal, accessible to close/backdrop handlers
   const confirmDraft = {
     candidates: [],           // [{ email, _userAdded?, _preselected?, _suggested? }]
@@ -1061,7 +1065,40 @@ function renderWeek(payload) {
   function openConfirmModal(iso, slot) {
     // Re-grab the current button node from the DOM
     confirmBtn = document.getElementById('confirmBtn');
-  
+
+    // If the colleague hasn't connected their calendar, disable booking UI.
+    (function applyCalendarGate(){
+      const footer = confirmModal.querySelector('footer');
+      const existingMsg = footer.querySelector('.no-cal-msg');
+      if (existingMsg) existingMsg.remove(); // avoid duplicates
+    
+      if (state.calendarAccessOk === false) {
+        // Hide the button that triggers reserveSlots
+        confirmBtn.style.display = 'none';
+    
+        // Friendly nudge + mailto
+        const name = state?.meta?.colleagueFirstName || state?.meta?.colleagueEmail || 'your Culture Amp contact';
+        const contact = state?.meta?.colleagueEmail || '';
+        const mailto = contact
+          ? `mailto:${encodeURIComponent(contact)}?subject=Booking%20request&body=${encodeURIComponent('Hi – could we book the slot we discussed?')}`
+          : null;
+    
+        const msg = document.createElement('div');
+        msg.className = 'no-cal-msg notice';
+        msg.style.marginRight = 'auto';
+        msg.style.textAlign = 'left';
+        msg.innerHTML = mailto
+          ? `Heads up: ${escapeHtml(name)} hasn’t connected their calendar yet, so we can’t book automatically here. Please <a href="${mailto}">reach out by email</a> to request this slot.`
+          : `Heads up: ${escapeHtml(name)} hasn’t connected their calendar yet, so we can’t book automatically here. Please reach out to them to request this slot.`;
+    
+        // Put the message where the button was
+        footer.prepend(msg);
+      } else {
+        // Ensure the button is visible when connected
+        confirmBtn.style.display = '';
+      }
+    })();
+
     const inviteListEl = document.getElementById('inviteList');
     const addInviteBtn = document.getElementById('addInviteBtn');
     const newInviteInp = document.getElementById('newInviteInput');
@@ -1769,6 +1806,7 @@ function renderAgenda(){
         if (!meta?.ok) throw new Error(meta?.error || 'Meta fetch failed');
   
         state.meta = meta;
+        state.calendarAccessOk = detectCalendarAccess(meta);
         
         // Coerce/parse meta.stateJSON from the API
         let sj = meta.stateJSON;
@@ -2856,6 +2894,36 @@ function normalizeTimezones(input) {
   }
   return out.length ? out : DEFAULT_TZS.slice();
 }
+
+// Try to infer "calendar connected" from the meta payload.
+// This is tolerant to different field names you might have on the BE today.
+function detectCalendarAccess(meta) {
+  if (!meta || typeof meta !== 'object') return false;
+
+  // Prefer explicit booleans if present
+  if (typeof meta.calendarAccessOk === 'boolean') return meta.calendarAccessOk;
+  if (typeof meta.connOk === 'boolean') return meta.connOk;
+  if (typeof meta.hasCalendar === 'boolean') return meta.hasCalendar;
+  if (typeof meta.hasOauth === 'boolean') return meta.hasOauth;
+  if (typeof meta.hasOAuth === 'boolean') return meta.hasOAuth;
+
+  // Object forms
+  if (meta.calendarAccess && typeof meta.calendarAccess.ok === 'boolean') return !!meta.calendarAccess.ok;
+  if (meta.conn && typeof meta.conn.ok === 'boolean') return !!meta.conn.ok;
+
+  // Fallback: if we can see a status string
+  const status = String(
+    meta?.calendarAccess?.status ||
+    meta?.conn?.status ||
+    meta?.calendarStatus ||
+    ''
+  ).toUpperCase();
+  if (status) return (status === 'OK' || status === 'CONNECTED');
+
+  // Default conservative
+  return false;
+}
+
 
   // Kick things off:
   init();
