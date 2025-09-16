@@ -1859,7 +1859,12 @@ function renderAgenda(){
     
         if (Array.isArray(meta.timezones)) timezones = meta.timezones;
         if (opts.initialTz) initialTz = opts.initialTz;
-        populateTzSelect(timezones, initialTz);
+        if (Array.isArray(meta.timezones)) timezones = meta.timezones;
+      
+        const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        state.tz = localStorage.getItem(TZ_STORE_KEY)
+               || meta.initialTz
+               || browserTz;
 
         // After meta processed + local weeks built:
         hideLoading();
@@ -2344,7 +2349,7 @@ function renderWeekInline(payload, mondayKey){
   nextBtn.onclick = () => openWeekInline(plusDaysKey(mondayKey, 7));
 
   nextPrev.append(prevBtn, nextBtn);
-  head.append(back, title, nextPrev);
+  head.append(back, title, tzPicker, nextPrev);
   wrap.appendChild(head);
 
   // grid (same logic as your renderWeek)
@@ -2740,37 +2745,6 @@ function buildTzList(baseList){
   return zones
     .map(z => ({ z, off: tzOffsetMinutes(z, now) }))
     .sort((a,b) => a.off - b.off || a.z.localeCompare(b.z));
-}
-
-// replace your populateTzSelect with this
-function populateTzSelect(zonesFromServer, initialGuess) {
-  const stored = localStorage.getItem(TZ_STORE_KEY);
-  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  const initial = stored || initialGuess || browserTz;
-
-  const list = buildTzList(zonesFromServer && zonesFromServer.length ? zonesFromServer : timezones);
-  tzSel.innerHTML = '';
-
-  list.forEach(({z, off}) => {
-    const opt = document.createElement('option');
-    opt.value = z;
-    opt.textContent = `${fmtOffset(off)} — ${z}`;
-    if (z === initial) opt.selected = true;
-    tzSel.appendChild(opt);
-  });
-
-  state.tz = initial;
-
-  tzSel.onchange = () => {
-    state.tz = tzSel.value;
-    localStorage.setItem(TZ_STORE_KEY, state.tz);
-    // live re-render where needed
-    if (!overviewView.classList.contains('hide')) renderOverview();
-    else if (state.currentWeek && state.weekCache.has(state.currentWeek)) renderWeek(state.weekCache.get(state.currentWeek));
-    const inline = document.getElementById('landingInline');
-    if (inline && inline.children.length) renderInlineQuarterList();
-    updateSaveUI(); // keeps “last saved at …” in the right tz
-  };
 }
 
 function tzOffsetLabel(zone, refDate = new Date()) {
