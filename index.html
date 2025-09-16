@@ -1600,6 +1600,15 @@ function renderAgenda(){
           paint();
         };
 
+        // visually disable arrows at the edges
+        if (idx === 0) {
+          up.disabled = true;
+          up.style.visibility = 'hidden'; // or keep visible: up.style.opacity = '.4';
+        }
+        if (idx === items().length - 1) {
+          down.disabled = true;
+          down.style.visibility = 'hidden'; // or opacity if you prefer
+        }
 
         const del = document.createElement('button');
         del.className = 'link-btn';
