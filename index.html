@@ -1216,13 +1216,36 @@ function renderWeek(payload) {
     
       runBlocking(
         () => apiPost('reserveSlots', { token }, { slots: [iso], extra }),
-        { startMsg: 'Booking your time…', slowMsg: 'Still working… calendars can be slow.' }
+        {
+          startMsg: 'Booking your time…',
+          slowMsg: 'Still working… calendars can be slow.',
+          showSlowImmediately: true,      // ← show spinner + slow message *right away*
+          holdUntil: () => {
+            // 1) Stamp the booking into meta so Step 1 reflects it immediately
+            if (!state.meta) state.meta = {};
+            state.meta.bookedStartISO = slot.start.toISOString();
+            state.meta.bookedEndISO   = slot.end.toISOString();
+            state.meta.selectedStartsJSON = [slot.start.toISOString()];
+            state.meta.status = 'USED';
+      
+            // 2) Update the landing cards now (so "Step 1" shows the time)
+            refreshLandingCards();
+      
+            // 3) Hide any week grids still on screen (week view or inline)
+            document.querySelectorAll('#weekView .week-wrap, #landingInline .week-wrap')
+              .forEach(el => el.classList.add('hide'));
+          }
+        }
       )
       .then(() => {
+        // Success UI on the button (kept as-is)
         confirmBtn.classList.add('success');
         confirmBtn.textContent = 'Booked!';
+      
+        // Move the user into Step 2 (prep questions)
         renderStep2FromSlot(slot);
-        refreshLandingCards();
+      
+        // Keep your existing “close the modal after a beat”
         setTimeout(() => {
           confirmModal.style.display = 'none';
           pendingIso = null; pendingPill = null;
@@ -1234,6 +1257,7 @@ function renderWeek(payload) {
         alert(err && err.message ? err.message : String(err));
         confirmBtn.disabled = false;
       });
+
     };
 
   }
@@ -2200,15 +2224,49 @@ function renderWeekInline(payload, mondayKey){
     }
   }
 
-  function runBlocking(promiseFactory, { startMsg="Working…", slowMsg="Still working… calendars can be slow.", slowAfterMs=5000 } = {}) {
-  showLoading(startMsg);
-  let slowTimer = setTimeout(() => { loadingMsg.textContent = slowMsg; }, slowAfterMs);
-  const clear = () => { clearTimeout(slowTimer); hideLoading(); };
-  return Promise.resolve()
-    .then(() => promiseFactory())
-    .then((v) => { clear(); return v; })
-    .catch((e) => { clear(); throw e; });
+function runBlocking(
+  promiseFactory,
+  {
+    startMsg = "Working…",
+    slowMsg = "Still working… calendars can be slow.",
+    slowAfterMs = 5000,
+    showSlowImmediately = false,
+    holdUntil = null,            // optional async fn to run (and finish) before we dismiss the overlay
+  } = {}
+) {
+  // Show overlay immediately (with either start or slow message)
+  showLoading(showSlowImmediately ? slowMsg : startMsg);
+
+  return new Promise((resolve, reject) => {
+    // Let the browser paint the overlay before starting the heavy work
+    requestAnimationFrame(() => {
+      let slowTimer = null;
+      if (!showSlowImmediately) {
+        slowTimer = setTimeout(() => { loadingMsg.textContent = slowMsg; }, slowAfterMs);
+      }
+
+      Promise.resolve()
+        .then(() => promiseFactory())
+        .then(async (v) => {
+          if (slowTimer) clearTimeout(slowTimer);
+
+          // If provided, finish UI updates *while* overlay is still up
+          if (typeof holdUntil === 'function') {
+            try { await holdUntil(v); } catch (_) {}
+          }
+
+          hideLoading();
+          resolve(v);
+        })
+        .catch((e) => {
+          if (slowTimer) clearTimeout(slowTimer);
+          hideLoading();
+          reject(e);
+        });
+    });
+  });
 }
+
 
 function generateWeeksForQuarter({
   year, quarter,
