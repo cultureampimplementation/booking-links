@@ -1964,58 +1964,64 @@ function monthsInQuarter(y,q){
 function parseQKey(qkey){ const [y, qpart] = qkey.split('-Q'); return { y: +y, q: +qpart }; }
 
 // Build a continuous list of quarters spanning the data you have.
-// Always include the "current quarter" even if no weeks exist in some months.
-function buildQuarterListFull(){
+function buildQuarterListFull({ futureQuarters = 3, pastQuarters = 0 } = {}) {
   const keys = [...(state.monthWeeks?.keys() || [])].sort(); // ["YYYY-MM", ...]
   const now = new Date();
   const curY = now.getUTCFullYear();
   const curM = now.getUTCMonth() + 1;
-  const curQKey = `${curY}-Q${Math.floor((curM-1)/3)+1}`;
+  const curQ  = Math.floor((curM - 1) / 3) + 1;
+  const curQKey = `${curY}-Q${curQ}`;
 
+  // Helper utilities
+  const ymToDate = (ym) => { const [y,m]=ym.split('-').map(Number); return new Date(Date.UTC(y, m-1, 1)); };
+  const monthsInQuarter = (y,q) => {
+    const s = (q-1)*3 + 1, pad = n => String(n).padStart(2,'0');
+    return [`${y}-${pad(s)}`, `${y}-${pad(s+1)}`, `${y}-${pad(s+2)}`];
+  };
+  const toNextQuarter = (y,q) => (q===4) ? { y:y+1, q:1 } : { y, q:q+1 };
+  const toPrevQuarter = (y,q) => (q===1) ? { y:y-1, q:4 } : { y, q:q-1 };
+
+  // Determine natural bounds from existing weeks (may be just current quarter)
   let minYM = keys[0] || `${curY}-${String(curM).padStart(2,'0')}`;
   let maxYM = keys[keys.length-1] || minYM;
 
-  // Expand bounds to at least the current quarter
-  const minD = ymToDate(minYM);
-  const maxD = ymToDate(maxYM);
-  const curD = ymToDate(`${curY}-${String(curM).padStart(2,'0')}`);
-  if (minD > curD) minYM = `${curY}-${String(curM).padStart(2,'0')}`;
-  if (maxD < curD) maxYM = `${curY}-${String(curM).padStart(2,'0')}`;
+  // Ensure current quarter is within bounds
+  const curYM = `${curY}-${String(curM).padStart(2,'0')}`;
+  if (ymToDate(minYM) > ymToDate(curYM)) minYM = curYM;
+  if (ymToDate(maxYM) < ymToDate(curYM)) maxYM = curYM;
 
-  // Iterate quarter by quarter from min to max
+  // Convert bounds to (y,q)
+  const ymToYQ = (ym) => {
+    const d = ymToDate(ym);
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth()+1;
+    return { y, q: Math.floor((m-1)/3)+1 };
+  };
+  let { y: minY, q: minQ } = ymToYQ(minYM);
+  let { y: maxY, q: maxQ } = ymToYQ(maxYM);
+
+  // Expand by requested horizon
+  for (let i = 0; i < pastQuarters; i++) ({ y:minY, q:minQ } = toPrevQuarter(minY, minQ));
+  for (let i = 0; i < futureQuarters; i++) ({ y:maxY, q:maxQ } = toNextQuarter(maxY, maxQ));
+
+  // Build list from min..max
   const list = [];
-  let y = ymToDate(minYM).getUTCFullYear();
-  let m = ymToDate(minYM).getUTCMonth()+1;
-
-  const toQ = (yy,mm)=> Math.floor((mm-1)/3)+1;
-  const toNextQuarter = (yy,qq)=> (qq===4)? {y:yy+1,q:1} : {y:yy,q:qq+1};
-
-  const maxY = ymToDate(maxYM).getUTCFullYear();
-  const maxQ = toQ(maxY, ymToDate(maxYM).getUTCMonth()+1);
-
-  let yy = y, qq = toQ(y,m);
-  while (true){
-    const key = `${yy}-Q${qq}`;
-    list.push({
-      key,
-      label: `Q${qq} ${yy}`,
-      months: monthsInQuarter(yy, qq)
-    });
-    if (yy === maxY && qq === maxQ) break;
-    ({y:yy, q:qq} = toNextQuarter(yy, qq));
+  let y = minY, q = minQ;
+  while (true) {
+    list.push({ key: `${y}-Q${q}`, label: `Q${q} ${y}`, months: monthsInQuarter(y, q) });
+    if (y === maxY && q === maxQ) break;
+    ({ y, q } = toNextQuarter(y, q));
   }
 
-  // Ensure current quarter is in the list (in case min/max were odd)
-  if (!list.find(q => q.key === curQKey)){
-    const {y:cy, q:cq} = parseQKey(curQKey);
-    const insert = { key: curQKey, label: `Q${cq} ${cy}`, months: monthsInQuarter(cy, cq) };
-    // insert in sorted order
-    const idx = list.findIndex(q => q.key > curQKey);
-    if (idx === -1) list.push(insert); else list.splice(idx, 0, insert);
+  // Ensure current quarter is present (it will be)
+  if (!list.find(x => x.key === curQKey)) {
+    list.push({ key: curQKey, label: `Q${curQ} ${curY}`, months: monthsInQuarter(curY, curQ) });
+    list.sort((a,b) => a.key.localeCompare(b.key));
   }
 
   return list;
 }
+
 
 function findCurrentQuarterIndex(quarters){
   const now = new Date();
@@ -2032,11 +2038,15 @@ function showInlineOverview(){
   const mount = document.getElementById('landingInline');
   if (!mount) return;
 
-  state._quarters = buildQuarterListFull();
-  state._qStartIndex = findCurrentQuarterIndex(state._quarters);
-  state._qRenderedEnd = state._qStartIndex;             // render current quarter first
+  // Use your existing config to decide how many future quarters to show
+  const monthsAhead = Number(state.meta?.options?.monthsAhead ?? 12);
+  const futureQuarters = Math.max(1, Math.ceil(monthsAhead / 3)); // e.g., 12 -> 4
 
-  renderInlineQuarterList();                             // draws current quarter
+  state._quarters = buildQuarterListFull({ futureQuarters, pastQuarters: 0 });
+  state._qStartIndex = findCurrentQuarterIndex(state._quarters);
+  state._qRenderedEnd = state._qStartIndex;   // start with current quarter only
+
+  renderInlineQuarterList();                   // "See more" will now append the next quarter(s)
 }
 
 function renderInlineQuarterList(){
