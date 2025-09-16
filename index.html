@@ -1428,7 +1428,15 @@ function renderStep2Questions(slot) {
 
   ensureStateShape();
 
-  const ctx = {}; // keep your interp() context if you want
+  // ✅ Provide values for interpolation
+  const ctx = {
+    colleagueFirstName:
+      state?.meta?.colleagueFirstName
+      || (state?.meta?.colleagueEmail ? state.meta.colleagueEmail.split('@')[0].split(/[._]/)[0] : '')
+      || 'your People Scientist',
+    customerName:  state?.meta?.customerName || state?.meta?.accountName || '',
+    meetingType:   state?.meta?.meetingType  || '',
+  };
 
   qs.forEach((cq, idx) => {
     const key   = String(cq?.key || (`q${idx}`));
