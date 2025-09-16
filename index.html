@@ -1393,6 +1393,7 @@ function renderStep2FromSlot(slot) {
   if (s2Colleague) s2Colleague.textContent = colleagueName;
 
   // (existing banner + questions + agenda)
+  renderPrepBanner(slot);
   renderStep2Questions(slot);
   renderAgenda(slot);
 
@@ -1417,7 +1418,15 @@ function renderStep2Questions(slot) {
 
   qs.forEach((cq, idx) => {
     const key   = String(cq?.key || (`q${idx}`));
-    const type  = (cq?.type || 'single').toLowerCase(); // single | multi | text
+    let rawType =
+      cq?.type ??
+      cq?.questionType ??
+      cq?.input ??
+      (cq?.multi === true ? 'multi' : 'single');
+    
+    let type = String(rawType).trim().toLowerCase();
+    if (type === 'checkbox' || type === 'checkboxes') type = 'multi';
+    if (type === 'textarea') type = 'text';
     const label = interp(cq?.label || 'Question', ctx) + (cq?.required ? ' *' : '');
 
     const block = document.createElement('div');
