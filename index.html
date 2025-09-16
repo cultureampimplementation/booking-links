@@ -1955,8 +1955,31 @@ function renderInlineQuarterList(){
   moreBtn.textContent = (end < quarters.length-1) ? 'See more' : 'No more to show';
   moreBtn.disabled = end >= quarters.length-1;
   moreBtn.onclick = () => {
-    state._qRenderedEnd = Math.min(end + 1, quarters.length-1);
-    renderInlineQuarterList(); // re-render including the newly appended quarter
+    const nextEnd = Math.min(end + 1, quarters.length - 1);
+    // Generate weeks for each newly revealed quarter
+    for (let i = end + 1; i <= nextEnd; i++) {
+      const q = quarters[i];
+      const { y, q: qn } = parseQKey(q.key);
+      const opts = {
+        initialTz: state.meta?.initialTz || state.tz || 'UTC',
+        minNoticeDays: Number(state.meta?.options?.minNoticeDays ?? 0),
+        weekdaysCSV: String(state.meta?.options?.weekdaysCSV || 'Mon,Tue,Wed,Thu,Fri'),
+        blackoutDatesCSV: String(state.meta?.options?.blackoutDatesCSV || '')
+      };
+      const weeks = generateWeeksForQuarter({ year: y, quarter: qn, ...opts });
+      // merge into state.monthWeeks
+      const mw = buildMonthWeeksFromWeekList(weeks);
+      for (const [ym, arr] of mw.entries()) {
+        if (!state.monthWeeks.has(ym)) state.monthWeeks.set(ym, []);
+        // append any weeks we don't already have
+        const existing = state.monthWeeks.get(ym);
+        const seen = new Set(existing.map(w => w.startISO));
+        arr.forEach(w => { if (!seen.has(w.startISO)) existing.push(w); });
+        existing.sort((a,b)=>a.startISO.localeCompare(b.startISO));
+      }
+    }
+    state._qRenderedEnd = nextEnd;
+    renderInlineQuarterList();
   };
   moreWrap.appendChild(moreBtn);
   mount.appendChild(moreWrap);
@@ -2185,6 +2208,50 @@ function renderWeekInline(payload, mondayKey){
     .then(() => promiseFactory())
     .then((v) => { clear(); return v; })
     .catch((e) => { clear(); throw e; });
+}
+
+function generateWeeksForQuarter({
+  year, quarter,
+  initialTz = 'UTC',
+  minNoticeDays = 0,
+  weekdaysCSV = 'Mon,Tue,Wed,Thu,Fri',
+  blackoutDatesCSV = ''
+} = {}) {
+  const pad = n => String(n).padStart(2,'0');
+  const startMonth = (quarter - 1) * 3 + 1;              // 1,4,7,10
+  const startKey   = `${year}-${pad(startMonth)}-01`;    // YYYY-MM-01
+  const afterKey   = (startMonth === 10)
+    ? `${year + 1}-01-01`
+    : `${year}-${pad(startMonth + 3)}-01`;
+
+  const startMon = mondayKey(startKey);
+  const afterMon = mondayKey(afterKey);
+
+  const allowedWeekdays = parseAllowedWeekdays(weekdaysCSV);
+  const blackouts = new Set(
+    String(blackoutDatesCSV||'')
+      .split(/[,\s]+/)
+      .map(s => s.trim())
+      .filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s))
+  );
+  const today = todayKey(initialTz);
+  const minStartKey = plusDaysKey(today, minNoticeDays);
+
+  const out = [];
+  for (let wk = startMon; wk < afterMon; wk = plusDaysKey(wk, 7)) {
+    const days = weekDaysFromMondayKey(wk);
+    const selectable = days.some(d =>
+      d >= minStartKey &&
+      !blackouts.has(d) &&
+      allowedWeekdays.has(dayOfWeekFromKey(d))
+    );
+    out.push({
+      startISO: new Date(wk + 'T00:00:00Z').toISOString(),
+      weekNum:  isoWeekNumberFromKey(wk),
+      selectable
+    });
+  }
+  return out;
 }
 
 
