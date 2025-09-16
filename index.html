@@ -754,19 +754,14 @@ function generateWeeksForCurrentQuarter({
   }
   function showOnly(view) {
     const onLanding = view === 'landing';
-    document.querySelector('h1')?.classList.toggle('hide', onLanding); // <-- Add this line
-    document.querySelector('.controls')?.classList.remove('hide'); // show on all views
+    document.querySelector('h1')?.classList.toggle('hide', onLanding);
     document.getElementById('notice')?.classList.toggle('hide', onLanding);
     document.getElementById('crumb')?.classList.toggle('hide', onLanding);
-    
-    landingView.classList.toggle('hide', !onLanding);
-    overviewView.classList.toggle('hide', view !== 'overview');
-    weekView.classList.toggle('hide', view !== 'week');
-    
-    // Keep tab styling sane when landing is shown
-    setTabs(view === 'week' ? 'week' : 'overview');
-  }
   
+    document.getElementById('landingView')?.classList.toggle('hide', !onLanding);
+    document.getElementById('overviewView')?.classList.toggle('hide', view !== 'overview');
+    document.getElementById('weekView')?.classList.toggle('hide', view !== 'week');
+  }  
   const landingView = document.getElementById('landingView');
   function setBreadcrumbForLanding(){ crumb.textContent = 'Welcome'; }
   function setBreadcrumbForOverview() { crumb.textContent = 'View: Overview'; }
