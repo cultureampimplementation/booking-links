@@ -1430,16 +1430,34 @@ function renderWeek(payload) {
     validateStep2Complete();
   }
 
-function renderAgenda() {
+function renderAgenda(){
+  ensureStateShape();
+
   const container = document.createElement('div');
   container.className = 'agenda-wrap';
   container.style.marginTop = '16px';
-  container.style.maxWidth = '660px'; // roughly step1 + step2 width
+  container.style.maxWidth = '660px';
 
   const title = document.createElement('div');
   title.className = 'agenda-title';
   title.textContent = 'Your agenda (optional)';
   container.appendChild(title);
+
+  // Save button (top-right-ish)
+  const saveRow = document.createElement('div');
+  saveRow.style.display = 'flex';
+  saveRow.style.justifyContent = 'flex-end';
+  saveRow.style.gap = '8px';
+  saveRow.style.margin = '6px 0 8px';
+
+  const saveBtn = document.createElement('button');
+  saveBtn.id = 'agendaSaveBtn';
+  saveBtn.className = 'btn';
+  saveBtn.textContent = 'Save';
+  saveBtn.disabled = !agendaDirty;
+  saveBtn.onclick = () => saveSnapshot();
+  saveRow.appendChild(saveBtn);
+  container.appendChild(saveRow);
 
   const list = document.createElement('div');
   list.id = 'agendaList';
@@ -1463,19 +1481,16 @@ function renderAgenda() {
   const mount = document.getElementById('s2Questions');
   mount.appendChild(container);
 
-  // track which rows are currently in "edit" mode
   const editing = new Set();
+  const items = () =>
+    (state.stateJSON.agenda.items || []).slice().sort((a,b)=>(a.order??0)-(b.order??0));
 
-  const sortedItems = () =>
-    (state.stateJSON?.agenda?.items || [])
-      .slice()
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-  function paint() {
+  // local-only paint
+  function paint(){
     list.innerHTML = '';
+    const arr = items();
 
-    const items = sortedItems();
-    if (!items.length) {
+    if (!arr.length){
       const p = document.createElement('p');
       p.className = 'notice';
       p.textContent = 'No agenda items yet.';
@@ -1483,29 +1498,27 @@ function renderAgenda() {
       return;
     }
 
-    items.forEach((it, idx) => {
+    arr.forEach((it, idx) => {
       const row = document.createElement('div');
       row.className = 'sel-item';
       row.style.justifyContent = 'space-between';
 
-      // LEFT
       const left = document.createElement('div');
       left.style.display = 'flex';
       left.style.alignItems = 'center';
       left.style.gap = '8px';
       left.style.flex = '1 1 auto';
 
-      const bullet = document.createElement('span');
-      bullet.textContent = '•';
-      left.appendChild(bullet);
-
-      // RIGHT actions
       const actions = document.createElement('div');
       actions.style.display = 'flex';
       actions.style.gap = '6px';
       actions.style.flexShrink = '0';
 
-      if (editing.has(it.id)) {
+      const bullet = document.createElement('span');
+      bullet.textContent = '•';
+      left.appendChild(bullet);
+
+      if (editing.has(it.id)){
         const inp = document.createElement('input');
         inp.type = 'text';
         inp.value = it.text;
@@ -1515,11 +1528,14 @@ function renderAgenda() {
         const save = document.createElement('button');
         save.className = 'link-btn';
         save.textContent = 'Save';
-        save.onclick = async () => {
-          const newText = String(inp.value || '').trim();
+        save.onclick = () => {
+          const t = String(inp.value||'').trim();
           editing.delete(it.id);
-          if (newText && newText !== it.text) {
-            await saveStatePatch({ agendaUpdate: { id: it.id, text: newText } });
+          if (t && t !== it.text){
+            it.text = t;
+            markDirty();
+            // optional autosave:
+            // saveSnapshotDebounced();
           }
           paint();
         };
@@ -1532,17 +1548,18 @@ function renderAgenda() {
         const del = document.createElement('button');
         del.className = 'link-btn';
         del.textContent = 'Remove';
-        del.onclick = async () => {
-          await saveStatePatch({ agendaRemove: { id: it.id } });
+        del.onclick = () => {
+          const src = state.stateJSON.agenda.items;
+          const i = src.findIndex(x => x.id === it.id);
+          if (i >= 0) src.splice(i,1);
           editing.delete(it.id);
+          renumberOrders();
+          markDirty();
+          // saveSnapshotDebounced();
           paint();
         };
 
         actions.append(save, cancel, del);
-        row.append(left, actions);
-
-        // focus on enter edit mode
-        setTimeout(() => inp.focus(), 0);
       } else {
         const txt = document.createElement('div');
         txt.textContent = it.text;
@@ -1556,45 +1573,83 @@ function renderAgenda() {
         const up = document.createElement('button');
         up.className = 'link-btn';
         up.textContent = '↑';
-        up.onclick = async () => {
+        up.onclick = () => {
           if (idx === 0) return;
-          // swap orders locally
-          const arr = sortedItems();
-          const a = arr[idx], b = arr[idx - 1];
+          const arr = items();
+          const a = arr[idx], b = arr[idx-1];
           const tmp = a.order; a.order = b.order; b.order = tmp;
-          const ids = arr.sort((x, y) => (x.order ?? 0) - (y.order ?? 0)).map(x => x.id);
-          await saveStatePatch({ agendaReorder: { ids } });
+          applyOrder(arr);
+          markDirty();
+          // saveSnapshotDebounced();
           paint();
         };
 
         const down = document.createElement('button');
         down.className = 'link-btn';
         down.textContent = '↓';
-        down.onclick = async () => {
-          const arr = sortedItems();
-          if (idx >= arr.length - 1) return;
-          const a = arr[idx], b = arr[idx + 1];
+        down.onclick = () => {
+          const arr = items();
+          if (idx >= arr.length-1) return;
+          const a = arr[idx], b = arr[idx+1];
           const tmp = a.order; a.order = b.order; b.order = tmp;
-          const ids = arr.sort((x, y) => (x.order ?? 0) - (y.order ?? 0)).map(x => x.id);
-          await saveStatePatch({ agendaReorder: { ids } });
+          applyOrder(arr);
+          markDirty();
+          // saveSnapshotDebounced();
           paint();
         };
 
         const del = document.createElement('button');
         del.className = 'link-btn';
         del.textContent = 'Remove';
-        del.onclick = async () => {
-          await saveStatePatch({ agendaRemove: { id: it.id } });
+        del.onclick = () => {
+          const src = state.stateJSON.agenda.items;
+          const i = src.findIndex(x => x.id === it.id);
+          if (i >= 0) src.splice(i,1);
+          renumberOrders();
+          markDirty();
+          // saveSnapshotDebounced();
           paint();
         };
 
         actions.append(edit, up, down, del);
-        row.append(left, actions);
       }
 
+      row.append(left, actions);
       list.appendChild(row);
     });
   }
+
+  function nextOrder(){ return Math.max(0, ...state.stateJSON.agenda.items.map(x => Number(x.order||0))) + 1; }
+  function renumberOrders(){
+    state.stateJSON.agenda.items
+      .sort((a,b)=>(a.order??0)-(b.order??0))
+      .forEach((it, i) => it.order = i+1);
+  }
+  function applyOrder(arr){
+    // writes order values back into the canonical array by id
+    const map = new Map(arr.map((x,i)=>[x.id, i+1]));
+    state.stateJSON.agenda.items.forEach(it => { if (map.has(it.id)) it.order = map.get(it.id); });
+  }
+
+  // Add
+  addBtn.onclick = () => {
+    const text = String(input.value || '').trim();
+    if (!text) return;
+    input.value = '';
+    const id = genId();
+    state.stateJSON.agenda.items.push({ id, text, order: nextOrder() });
+    markDirty();
+    // saveSnapshotDebounced();
+    paint();
+  };
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter'){ e.preventDefault(); addBtn.click(); }
+  });
+
+  paint();
+}
+
 
   addBtn.onclick = async () => {
     const text = String(input.value || '').trim();
@@ -2497,6 +2552,47 @@ function saveStatePatch(patch) {
 
 // Give the browser a frame (or two) to paint UI changes
 const nextFrame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+// ---- IDs, dirty flag, and snapshot saving ----
+function genId(){ return 'id_' + Math.random().toString(36).slice(2, 9); }
+
+function ensureStateShape(){
+  if (!state.stateJSON) state.stateJSON = { version:1, lastEditedAtISO:new Date().toISOString(), prep:{answers:{}}, agenda:{items:[]} };
+  if (!state.stateJSON.prep) state.stateJSON.prep = { answers:{} };
+  if (!state.stateJSON.agenda) state.stateJSON.agenda = { items:[] };
+  if (!Array.isArray(state.stateJSON.agenda.items)) state.stateJSON.agenda.items = [];
+}
+
+let agendaDirty = false;
+function markDirty(){
+  agendaDirty = true;
+  const btn = document.getElementById('agendaSaveBtn');
+  if (btn) btn.disabled = false;
+}
+
+async function saveSnapshot(){
+  ensureStateShape();
+  const btn = document.getElementById('agendaSaveBtn');
+  if (btn){
+    btn.textContent = 'Saving…';
+    btn.disabled = true;
+  }
+  try{
+    state.stateJSON.lastEditedAtISO = new Date().toISOString();
+    await apiPost('saveStateJSON', { token }, { stateJSON: state.stateJSON });
+    agendaDirty = false;
+    if (btn){ btn.textContent = 'Saved ✓'; setTimeout(()=>{ btn.textContent='Save'; }, 800); }
+  } catch(e){
+    console.warn('saveStateJSON failed', e);
+    agendaDirty = true;
+    if (btn){ btn.textContent = 'Save (retry)'; btn.disabled = false; }
+    alert('Could not save right now. Your changes are still visible locally.');
+  }
+}
+
+// optional autosave (keep or remove)
+const saveSnapshotDebounced = makeDebounce(() => saveSnapshot().catch(()=>{}), 800);
+
 
   // Kick things off:
   init();
