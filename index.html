@@ -362,15 +362,18 @@
   <div id="step2" class="hide">
     <div class="week-wrap">
       <div class="week-head">
-        <div class="week-title">Step 2: Share your input for <span id="s2Colleague"></span>’s prep</div>
+        <div class="week-title">Step 2: Help <span id="s2Colleague"></span> prepare</div>
       </div>
-      <div class="banner" id="s2Note"></div>
+      <!-- subheading (shown conditionally; replaces old s2Note) -->
+      <div class="notice" id="s2Sub" style="display:none;margin-top:6px;"></div>
+  
       <div id="s2Questions" class="notice" style="margin-top:12px;"></div>
       <footer style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
-        <button class="btn" id="s2DoneBtn" disabled>Done</button>
+        <button class="btn" id="s2DoneBtn" disabled>Save</button>
       </footer>
     </div>
   </div>
+
 
   <!-- CONFIRM MODAL (single-select flow) -->
   <div class="modal-backdrop" id="confirmModal">
@@ -1309,7 +1312,8 @@ function renderWeek(payload) {
     document.getElementById('step2')?.classList.remove('hide');
   
     const s2Colleague = document.getElementById('s2Colleague');
-    const s2Note = document.getElementById('s2Note');
+    const s2Sub       = document.getElementById('s2Sub');
+  
     const colleagueName =
       state?.meta?.colleagueFirstName ||
       state?.meta?.colleagueEmail ||
@@ -1317,118 +1321,126 @@ function renderWeek(payload) {
   
     if (s2Colleague) s2Colleague.textContent = colleagueName;
   
-    if (slot && slot.prep && slot.prep.start && slot.prep.end) {
-      const ps = slot.prep.start, pe = slot.prep.end;
-      s2Note.textContent =
-        `${colleagueName} is holding time at ${fmtRangeLocal(ps, pe, state.tz)} on ${fmtDateLocal(ps, state.tz)} to prepare for your session. Please share your input below ahead of this time.`;
-    } else {
-      s2Note.textContent = 'Please share a bit of context to help us prepare for your session.';
+    // subheading logic (replaces old s2Note)
+    const hasQs   = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length > 0;
+    const hasPrep = !!(slot && slot.prep && slot.prep.start && slot.prep.end);
+  
+    if (s2Sub){
+      s2Sub.style.display = 'none';
+      if (hasQs && hasPrep){
+        const ps = slot.prep.start;
+        const startTime = fmtTimeLocal(ps, state.tz).replace(':','h');
+        s2Sub.textContent =
+          `We've held a preparation slot for ${colleagueName} on ${fmtDateLocal(ps, state.tz)} at ${startTime}. ` +
+          `Answering the questions below will help them in their preparations.`;
+        s2Sub.style.display = '';
+      } else if (hasQs && !hasPrep){
+        s2Sub.textContent = `Answering the questions below will help them in their preparation.`;
+        s2Sub.style.display = '';
+      }
     }
   
     renderStep2Questions(slot);
     renderAgenda(slot);
   
     const doneBtn = document.getElementById('s2DoneBtn');
+    doneBtn.textContent = 'Save';
+    doneBtn.disabled = !areRequiredQuestionsAnswered();
     doneBtn.onclick = () => {
-      doneBtn.classList.add('success');
-      doneBtn.textContent = 'Saved ✓';
-      // (optional) navigate somewhere, or keep the page as a receipt
+      // only save if there is something to save; otherwise just show “Saved”
+      if (agendaDirty || prepDirty){
+        saveSnapshot();
+      } else {
+        markClean();
+      }
     };
   }
 
-  function renderStep2Questions(slot) {
-    const container = document.getElementById('s2Questions');
-    const doneBtn   = document.getElementById('s2DoneBtn');
-    container.innerHTML = '';
-  
-    const prep = slot?.prep || null;
-  
-    const ctx = {
-      colleagueName:      state.meta?.colleagueFirstName || state.meta?.colleagueEmail || '',
-      colleagueFirstName: state.meta?.colleagueFirstName || '',
-      colleagueEmail:     state.meta?.colleagueEmail || '',
-      customerName:       state.meta?.customerName || '',
-      meetingType:        state.meta?.meetingType || '',
-      meetingDate:        slot ? fmtDateLocal(slot.start, state.tz) : '',
-      meetingTime:        slot ? fmtRangeLocal(slot.start, slot.end, state.tz) : '',
-      tz:                 state.tz,
-      // prep specifics
-      prepDate:           prep ? fmtDateLocal(prep.start, state.tz) : '',
-      prepTime:           prep ? fmtRangeLocal(prep.start, prep.end, state.tz) : '',
-      prepDurationMins:   prep ? Math.round((prep.end - prep.start)/60000)
-                               : (state.meta?.options?.prepDurationMins ?? ''),
-      prepSameDay:        prep ? (ymdKey(prep.start, state.tz) === ymdKey(slot.start, state.tz) ? 'yes' : 'no') : '',
-      prepDayName:        prep ? new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, weekday:'long' }).format(prep.start) : ''
-    };
-  
-    // source of truth: array of questions on meta/options
-    const qs = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length
-      ? state.confirmQuestions
-      : (state.confirmQuestion ? [state.confirmQuestion] : []);
-  
-    if (!qs.length) {
-      container.innerHTML = '<div class="notice">No extra input needed.</div>';
-      doneBtn.disabled = false;
-      return;
-    }
-  
-    // ensure stateJSON scaffolding
-    if (!state.stateJSON) state.stateJSON = { version: 1, lastEditedAtISO: new Date().toISOString(), prep: { answers: {} }, agenda: { items: [] } };
-    if (!state.stateJSON.prep) state.stateJSON.prep = { answers: {} };
-    if (!state.stateJSON.prep.answers) state.stateJSON.prep.answers = {};
-  
-    qs.forEach((cq, idx) => {
-      const key = String(cq?.key || (`q${idx}`));
-      const block = document.createElement('div');
-      block.style.margin = '12px 0';
-  
-      const title = document.createElement('div');
-      title.className = 'cq-title';
-      title.textContent = interp(cq?.label || 'Question', ctx) + (cq?.required ? ' *' : '');
-      block.appendChild(title);
-  
-      const opts = parseOptionsLoose(cq?.options).map(cleanLabel);
-      const savedFromState = state.stateJSON.prep.answers[key] ?? null; // ← saved answer
-      const savedLegacy    = cq?.saved != null ? cleanLabel(cq.saved) : null;
-      const saved = (savedFromState != null ? savedFromState : savedLegacy);
-  
-      opts.forEach(optRaw => {
-        const rendered = interp(cleanLabel(optRaw), ctx);
-        const id = `s2_${key}_${rendered.replace(/\W+/g,'_')}`;
-  
-        const row = document.createElement('div');
-        row.className = 'cq-row';
-  
-        const rb = document.createElement('input');
-        rb.type = 'radio';
-        rb.name = `s2_${key}`;
-        rb.id = id;
-        rb.value = rendered;
-        if (saved && String(saved) === rendered) rb.checked = true;
-  
-        rb.addEventListener('change', () => {
-          // update local state immediately
-          state.stateJSON.prep.answers[key] = rendered;
-          state.stateJSON.lastEditedAtISO = new Date().toISOString();
-          // persist (debounced)
-          saveSnapshotDebounced();
-          validateStep2Complete();
-        });
-  
-        const lab = document.createElement('label');
-        lab.setAttribute('for', id);
-        lab.textContent = rendered;
-  
-        row.append(rb, lab);
-        block.appendChild(row);
-      });
-  
-      container.appendChild(block);
-    });
-  
-    // initial validation
-    validateStep2Complete();
+function renderStep2Questions(slot) {
+  const container = document.getElementById('s2Questions');
+  const doneBtn   = document.getElementById('s2DoneBtn');
+  container.innerHTML = '';
+
+  const prep = slot?.prep || null;
+
+  const ctx = {
+    colleagueName:      state.meta?.colleagueFirstName || state.meta?.colleagueEmail || '',
+    colleagueFirstName: state.meta?.colleagueFirstName || '',
+    colleagueEmail:     state.meta?.colleagueEmail || '',
+    customerName:       state.meta?.customerName || '',
+    meetingType:        state.meta?.meetingType || '',
+    meetingDate:        slot ? fmtDateLocal(slot.start, state.tz) : '',
+    meetingTime:        slot ? fmtRangeLocal(slot.start, slot.end, state.tz) : '',
+    tz:                 state.tz,
+    prepDate:           prep ? fmtDateLocal(prep.start, state.tz) : '',
+    prepTime:           prep ? fmtRangeLocal(prep.start, prep.end, state.tz) : '',
+    prepDurationMins:   prep ? Math.round((prep.end - prep.start)/60000)
+                             : (state.meta?.options?.prepDurationMins ?? ''),
+    prepSameDay:        prep ? (ymdKey(prep.start, state.tz) === ymdKey(slot.start, state.tz) ? 'yes' : 'no') : '',
+    prepDayName:        prep ? new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, weekday:'long' }).format(prep.start) : ''
+  };
+
+  const qs = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length
+    ? state.confirmQuestions
+    : (state.confirmQuestion ? [state.confirmQuestion] : []);
+
+  // if no questions, leave the container empty (we’ll still show the agenda below)
+  if (!qs.length) {
+    doneBtn.disabled = !areRequiredQuestionsAnswered();
+    return;
   }
+
+  ensureStateShape();
+
+  qs.forEach((cq, idx) => {
+    const key = String(cq?.key || (`q${idx}`));
+    const block = document.createElement('div');
+    block.style.margin = '12px 0';
+
+    const title = document.createElement('div');
+    title.className = 'cq-title';
+    title.textContent = interp(cq?.label || 'Question', ctx) + (cq?.required ? ' *' : '');
+    block.appendChild(title);
+
+    const opts = parseOptionsLoose(cq?.options).map(cleanLabel);
+    const saved = state.stateJSON.prep?.answers?.[key] ?? (cq?.saved != null ? cleanLabel(cq.saved) : null);
+
+    opts.forEach(optRaw => {
+      const rendered = interp(cleanLabel(optRaw), ctx);
+      const id = `s2_${key}_${rendered.replace(/\W+/g,'_')}`;
+
+      const row = document.createElement('div');
+      row.className = 'cq-row';
+
+      const rb = document.createElement('input');
+      rb.type = 'radio';
+      rb.name = `s2_${key}`;
+      rb.id = id;
+      rb.value = rendered;
+      if (saved && String(saved) === rendered) rb.checked = true;
+
+      rb.addEventListener('change', () => {
+        ensureStateShape();
+        state.stateJSON.prep.answers[key] = rendered;
+        state.stateJSON.lastEditedAtISO = new Date().toISOString();
+        prepDirty = true;
+        doneBtn.disabled = !areRequiredQuestionsAnswered();
+        markDirty();
+      });
+
+      const lab = document.createElement('label');
+      lab.setAttribute('for', id);
+      lab.textContent = rendered;
+
+      row.append(rb, lab);
+      block.appendChild(row);
+    });
+
+    container.appendChild(block);
+  });
+
+  doneBtn.disabled = !areRequiredQuestionsAnswered();
+}
 
 function renderAgenda(){
   ensureStateShape();
@@ -1442,22 +1454,6 @@ function renderAgenda(){
   title.className = 'agenda-title';
   title.textContent = 'Add your questions to help shape the agenda below';
   container.appendChild(title);
-
-  // Save button (top-right-ish)
-  const saveRow = document.createElement('div');
-  saveRow.style.display = 'flex';
-  saveRow.style.justifyContent = 'flex-end';
-  saveRow.style.gap = '8px';
-  saveRow.style.margin = '6px 0 8px';
-
-  const saveBtn = document.createElement('button');
-  saveBtn.id = 'agendaSaveBtn';
-  saveBtn.className = 'btn';
-  saveBtn.textContent = 'Save';
-  saveBtn.disabled = !agendaDirty;
-  saveBtn.onclick = () => saveSnapshot();
-  saveRow.appendChild(saveBtn);
-  container.appendChild(saveRow);
 
   const list = document.createElement('div');
   list.id = 'agendaList';
@@ -1485,19 +1481,11 @@ function renderAgenda(){
   const items = () =>
     (state.stateJSON.agenda.items || []).slice().sort((a,b)=>(a.order??0)-(b.order??0));
 
-  // local-only paint
   function paint(){
     list.innerHTML = '';
     const arr = items();
 
-    if (!arr.length){
-      const p = document.createElement('p');
-      p.className = 'notice';
-      p.textContent = 'No agenda items yet.';
-      list.appendChild(p);
-      return;
-    }
-
+    // no “No agenda items yet.” message; just show the input row above
     arr.forEach((it, idx) => {
       const row = document.createElement('div');
       row.className = 'sel-item';
@@ -1533,9 +1521,8 @@ function renderAgenda(){
           editing.delete(it.id);
           if (t && t !== it.text){
             it.text = t;
+            agendaDirty = true;
             markDirty();
-            // optional autosave:
-            // saveSnapshotDebounced();
           }
           paint();
         };
@@ -1554,8 +1541,8 @@ function renderAgenda(){
           if (i >= 0) src.splice(i,1);
           editing.delete(it.id);
           renumberOrders();
+          agendaDirty = true;
           markDirty();
-          // saveSnapshotDebounced();
           paint();
         };
 
@@ -1570,44 +1557,41 @@ function renderAgenda(){
         edit.textContent = 'Edit';
         edit.onclick = () => { editing.add(it.id); paint(); };
 
-        // ↑ move up
         const up = document.createElement('button');
         up.className = 'link-btn';
         up.textContent = '↑';
         up.onclick = () => {
           const arr = items();
-          if (idx === 0) return;               // already at top
+          if (idx === 0) return;
           const a = arr[idx], b = arr[idx-1];
-          // swap their order values
           const tmp = a.order; a.order = b.order; b.order = tmp;
-          // normalize to 1..N based on order
           renumberOrders();
+          agendaDirty = true;
           markDirty();
           paint();
         };
-        
-        // ↓ move down
+
         const down = document.createElement('button');
         down.className = 'link-btn';
         down.textContent = '↓';
         down.onclick = () => {
           const arr = items();
-          if (idx >= arr.length - 1) return;   // already at bottom
+          if (idx >= arr.length - 1) return;
           const a = arr[idx], b = arr[idx+1];
           const tmp = a.order; a.order = b.order; b.order = tmp;
           renumberOrders();
+          agendaDirty = true;
           markDirty();
           paint();
         };
 
-        // visually disable arrows at the edges
         if (idx === 0) {
           up.disabled = true;
-          up.style.visibility = 'hidden'; // or keep visible: up.style.opacity = '.4';
+          up.style.visibility = 'hidden';
         }
         if (idx === items().length - 1) {
           down.disabled = true;
-          down.style.visibility = 'hidden'; // or opacity if you prefer
+          down.style.visibility = 'hidden';
         }
 
         const del = document.createElement('button');
@@ -1618,8 +1602,8 @@ function renderAgenda(){
           const i = src.findIndex(x => x.id === it.id);
           if (i >= 0) src.splice(i,1);
           renumberOrders();
+          agendaDirty = true;
           markDirty();
-          // saveSnapshotDebounced();
           paint();
         };
 
@@ -1637,31 +1621,24 @@ function renderAgenda(){
       .sort((a,b)=>(a.order??0)-(b.order??0))
       .forEach((it, i) => it.order = i+1);
   }
-  function applyOrder(arr){
-    // writes order values back into the canonical array by id
-    const map = new Map(arr.map((x,i)=>[x.id, i+1]));
-    state.stateJSON.agenda.items.forEach(it => { if (map.has(it.id)) it.order = map.get(it.id); });
-  }
 
-  // Add
+  // Add new
   addBtn.onclick = () => {
     const text = String(input.value || '').trim();
     if (!text) return;
     input.value = '';
     const id = genId();
     state.stateJSON.agenda.items.push({ id, text, order: nextOrder() });
+    agendaDirty = true;
     markDirty();
-    // saveSnapshotDebounced();
     paint();
   };
-
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter'){ e.preventDefault(); addBtn.click(); }
   });
 
   paint();
 }
-
 
 
 function validateStep2Complete() {
@@ -2568,7 +2545,7 @@ function markDirty(){
 
 async function saveSnapshot(){
   ensureStateShape();
-  const btn = document.getElementById('agendaSaveBtn');
+  const btn = document.getElementById('s2DoneBtn');
   if (btn){
     btn.textContent = 'Saving…';
     btn.disabled = true;
@@ -2576,18 +2553,55 @@ async function saveSnapshot(){
   try{
     state.stateJSON.lastEditedAtISO = new Date().toISOString();
     await apiPost('saveStateJSON', { token }, { stateJSON: state.stateJSON });
-    agendaDirty = false;
-    if (btn){ btn.textContent = 'Saved ✓'; setTimeout(()=>{ btn.textContent='Save'; }, 800); }
+    markClean();
   } catch(e){
     console.warn('saveStateJSON failed', e);
-    agendaDirty = true;
     if (btn){ btn.textContent = 'Save (retry)'; btn.disabled = false; }
     alert('Could not save right now. Your changes are still visible locally.');
   }
 }
 
+
 // optional autosave (keep or remove)
 const saveSnapshotDebounced = makeDebounce(() => saveSnapshot().catch(()=>{}), 800);
+
+// ---- unified dirty tracking ----
+let agendaDirty = false;
+let prepDirty   = false;
+
+function markDirty(){
+  // any change in agenda or prep calls this
+  const btn = document.getElementById('s2DoneBtn');
+  if (btn){
+    btn.disabled = !areRequiredQuestionsAnswered();
+    btn.textContent = 'Save';
+  }
+}
+
+function markClean(){
+  agendaDirty = false;
+  prepDirty   = false;
+  const btn = document.getElementById('s2DoneBtn');
+  if (btn){
+    btn.textContent = 'Saved ✓';
+    btn.disabled = !areRequiredQuestionsAnswered();
+    setTimeout(()=>{ btn.textContent = 'Save'; }, 900);
+  }
+}
+
+function areRequiredQuestionsAnswered(){
+  const qs = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length
+    ? state.confirmQuestions
+    : (state.confirmQuestion ? [state.confirmQuestion] : []);
+
+  if (!qs.length) return true; // nothing required
+  const answers = state.stateJSON?.prep?.answers || {};
+  return qs.every((q, idx) => {
+    if (!q?.required) return true;
+    const key = String(q.key || ('q' + idx));
+    return !!answers[key];
+  });
+}
 
 
   // Kick things off:
