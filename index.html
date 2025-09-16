@@ -1308,6 +1308,7 @@ function renderWeek(payload) {
     }
   
     renderStep2Questions(slot);
+    renderAgenda(slot);
   
     const doneBtn = document.getElementById('s2DoneBtn');
     doneBtn.onclick = () => {
@@ -1317,7 +1318,6 @@ function renderWeek(payload) {
     };
   }
 
-
   function renderStep2Questions(slot) {
     const container = document.getElementById('s2Questions');
     const doneBtn   = document.getElementById('s2DoneBtn');
@@ -1326,24 +1326,24 @@ function renderWeek(payload) {
     const prep = slot?.prep || null;
   
     const ctx = {
-      colleagueName:     state.meta?.colleagueFirstName || state.meta?.colleagueEmail || '',
-      colleagueFirstName:state.meta?.colleagueFirstName || '',
-      colleagueEmail:    state.meta?.colleagueEmail || '',
-      customerName:      state.meta?.customerName || '',
-      meetingType:       state.meta?.meetingType || '',
-      meetingDate:       slot ? fmtDateLocal(slot.start, state.tz) : '',
-      meetingTime:       slot ? fmtRangeLocal(slot.start, slot.end, state.tz) : '',
-      tz:                state.tz,
-  
+      colleagueName:      state.meta?.colleagueFirstName || state.meta?.colleagueEmail || '',
+      colleagueFirstName: state.meta?.colleagueFirstName || '',
+      colleagueEmail:     state.meta?.colleagueEmail || '',
+      customerName:       state.meta?.customerName || '',
+      meetingType:        state.meta?.meetingType || '',
+      meetingDate:        slot ? fmtDateLocal(slot.start, state.tz) : '',
+      meetingTime:        slot ? fmtRangeLocal(slot.start, slot.end, state.tz) : '',
+      tz:                 state.tz,
       // prep specifics
-      prepDate:          prep ? fmtDateLocal(prep.start, state.tz) : '',
-      prepTime:          prep ? fmtRangeLocal(prep.start, prep.end, state.tz) : '',
-      prepDurationMins:  prep ? Math.round((prep.end - prep.start)/60000)
-                              : (state.meta?.options?.prepDurationMins ?? ''),
-      prepSameDay:       prep ? (ymdKey(prep.start, state.tz) === ymdKey(slot.start, state.tz) ? 'yes' : 'no') : '',
-      prepDayName:       prep ? new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, weekday:'long' }).format(prep.start) : ''
+      prepDate:           prep ? fmtDateLocal(prep.start, state.tz) : '',
+      prepTime:           prep ? fmtRangeLocal(prep.start, prep.end, state.tz) : '',
+      prepDurationMins:   prep ? Math.round((prep.end - prep.start)/60000)
+                               : (state.meta?.options?.prepDurationMins ?? ''),
+      prepSameDay:        prep ? (ymdKey(prep.start, state.tz) === ymdKey(slot.start, state.tz) ? 'yes' : 'no') : '',
+      prepDayName:        prep ? new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, weekday:'long' }).format(prep.start) : ''
     };
   
+    // source of truth: array of questions on meta/options
     const qs = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length
       ? state.confirmQuestions
       : (state.confirmQuestion ? [state.confirmQuestion] : []);
@@ -1354,35 +1354,46 @@ function renderWeek(payload) {
       return;
     }
   
-    // Build the UI
+    // ensure stateJSON scaffolding
+    if (!state.stateJSON) state.stateJSON = { version: 1, lastEditedAtISO: new Date().toISOString(), prep: { answers: {} }, agenda: { items: [] } };
+    if (!state.stateJSON.prep) state.stateJSON.prep = { answers: {} };
+    if (!state.stateJSON.prep.answers) state.stateJSON.prep.answers = {};
+  
     qs.forEach((cq, idx) => {
+      const key = String(cq?.key || (`q${idx}`));
       const block = document.createElement('div');
       block.style.margin = '12px 0';
   
       const title = document.createElement('div');
       title.className = 'cq-title';
-      title.textContent = interp(cq.label || 'Question', ctx) + (cq.required ? ' *' : '');
+      title.textContent = interp(cq?.label || 'Question', ctx) + (cq?.required ? ' *' : '');
       block.appendChild(title);
   
-      const opts = parseOptionsLoose(cq.options).map(cleanLabel);
-      const saved = cq.saved != null ? cleanLabel(cq.saved) : null;
+      const opts = parseOptionsLoose(cq?.options).map(cleanLabel);
+      const savedFromState = state.stateJSON.prep.answers[key] ?? null; // ← saved answer
+      const savedLegacy    = cq?.saved != null ? cleanLabel(cq.saved) : null;
+      const saved = (savedFromState != null ? savedFromState : savedLegacy);
   
       opts.forEach(optRaw => {
         const rendered = interp(cleanLabel(optRaw), ctx);
-        const id = `s2_${cq.key || ('q'+idx)}_${rendered.replace(/\W+/g,'_')}`;
+        const id = `s2_${key}_${rendered.replace(/\W+/g,'_')}`;
   
         const row = document.createElement('div');
         row.className = 'cq-row';
   
         const rb = document.createElement('input');
         rb.type = 'radio';
-        rb.name = `s2_${cq.key || ('q'+idx)}`;
+        rb.name = `s2_${key}`;
         rb.id = id;
         rb.value = rendered;
-        if (saved && saved === rendered) rb.checked = true;
+        if (saved && String(saved) === rendered) rb.checked = true;
+  
         rb.addEventListener('change', () => {
-          const k = String(cq.key || ('q'+idx));
-          saveConfirmAnswerDebounced(k, rendered);
+          // update local state immediately
+          state.stateJSON.prep.answers[key] = rendered;
+          state.stateJSON.lastEditedAtISO = new Date().toISOString();
+          // persist (debounced)
+          saveStatePatchDebounced({ set: { path: `prep.answers.${key}`, value: rendered } });
           validateStep2Complete();
         });
   
@@ -1400,6 +1411,130 @@ function renderWeek(payload) {
     // initial validation
     validateStep2Complete();
   }
+
+
+  function renderAgenda() {
+    const container = document.createElement('div');
+    container.style.marginTop = '16px';
+  
+    const title = document.createElement('div');
+    title.className = 'cq-title';
+    title.textContent = 'Your agenda (optional)';
+    container.appendChild(title);
+  
+    const list = document.createElement('div');
+    list.id = 'agendaList';
+    list.style.display = 'grid';
+    list.style.gap = '8px';
+    container.appendChild(list);
+  
+    const addRow = document.createElement('div');
+    addRow.style.display = 'flex';
+    addRow.style.gap = '8px';
+    addRow.style.marginTop = '8px';
+  
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Add an agenda item…';
+    input.style.flex = '1';
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn';
+    addBtn.textContent = 'Add';
+  
+    addRow.append(input, addBtn);
+    container.appendChild(addRow);
+  
+    const mount = document.getElementById('s2Questions');
+    mount.appendChild(container);
+  
+    function paint() {
+      list.innerHTML = '';
+      const items = (state.stateJSON?.agenda?.items || []).slice().sort((a,b)=> (a.order ?? 0) - (b.order ?? 0));
+      items.forEach((it, idx) => {
+        const row = document.createElement('div');
+        row.className = 'sel-item';
+  
+        const left = document.createElement('div');
+        left.style.display = 'flex';
+        left.style.gap = '8px';
+        left.style.alignItems = 'center';
+  
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = !!it.done;
+        cb.onchange = () => {
+          it.done = cb.checked;
+          it.updatedAtISO = new Date().toISOString();
+          saveStatePatch({ agendaUpdate: { id: it.id, done: it.done } }).catch(console.error);
+        };
+  
+        const txt = document.createElement('input');
+        txt.type = 'text';
+        txt.value = it.text;
+        txt.style.minWidth = '240px';
+        txt.onchange = () => {
+          it.text = txt.value.trim();
+          it.updatedAtISO = new Date().toISOString();
+          saveStatePatch({ agendaUpdate: { id: it.id, text: it.text } }).catch(console.error);
+        };
+  
+        left.append(cb, txt);
+  
+        const controls = document.createElement('div');
+        controls.style.display = 'flex';
+        controls.style.gap = '6px';
+  
+        const up = document.createElement('button'); up.className = 'link-btn'; up.textContent = '↑';
+        up.onclick = () => move(idx, -1);
+  
+        const down = document.createElement('button'); down.className = 'link-btn'; down.textContent = '↓';
+        down.onclick = () => move(idx, +1);
+  
+        const del = document.createElement('button'); del.className = 'link-btn'; del.textContent = 'Remove';
+        del.onclick = () => {
+          saveStatePatch({ agendaRemove: { id: it.id } }).then(res => {
+            // server returns merged state; local state will be replaced in save helper
+            paint();
+          }).catch(console.error);
+        };
+  
+        controls.append(up, down, del);
+        row.append(left, controls);
+        list.appendChild(row);
+      });
+    }
+  
+    function move(idx, delta) {
+      const items = (state.stateJSON?.agenda?.items || []).slice().sort((a,b)=> (a.order ?? 0) - (b.order ?? 0));
+      const j = idx + delta;
+      if (j < 0 || j >= items.length) return;
+      const tmp = items[idx].order;
+      items[idx].order = items[j].order;
+      items[j].order = tmp;
+      // push new order to server
+      const ids = items.sort((a,b)=> (a.order ?? 0) - (b.order ?? 0)).map(x => x.id);
+      saveStatePatch({ agendaReorder: { ids } }).then(res => {
+        // state.stateJSON replaced in save helper
+        paint();
+      }).catch(console.error);
+    }
+  
+    addBtn.onclick = () => {
+      const text = String(input.value || '').trim();
+      if (!text) return;
+      input.value = '';
+      saveStatePatch({ agendaAdd: { text } }).then(res => {
+        paint();
+      }).catch(console.error);
+    };
+  
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); addBtn.click(); }
+    });
+  
+    paint();
+  }
+
   
   function validateStep2Complete() {
     const doneBtn = document.getElementById('s2DoneBtn');
@@ -1529,6 +1664,10 @@ function renderWeek(payload) {
         if (!meta?.ok) throw new Error(meta?.error || 'Meta fetch failed');
   
         state.meta = meta;
+        state.stateJSON = meta.stateJSON && typeof meta.stateJSON === 'object'
+          ? meta.stateJSON
+          : { version: 1, lastEditedAtISO: new Date().toISOString(), prep: { answers: {} }, agenda: { items: [] } };
+
   
         // Names in header/step 2/landing
         const displayName = meta.colleagueFirstName || meta.colleagueEmail || '';
@@ -2252,6 +2391,13 @@ function generateWeeksForQuarter({
     });
   }
   return out;
+}
+
+function saveStatePatch(patch) {
+  return apiPost('saveStatePatch', { token }, patch).then(res => {
+    if (res && res.stateJSON) state.stateJSON = res.stateJSON; // server returns merged state
+    return res;
+  });
 }
 
 // Give the browser a frame (or two) to paint UI changes
