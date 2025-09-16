@@ -1671,9 +1671,19 @@ function validateStep2Complete() {
         if (!meta?.ok) throw new Error(meta?.error || 'Meta fetch failed');
   
         state.meta = meta;
-        state.stateJSON = meta.stateJSON && typeof meta.stateJSON === 'object'
-          ? meta.stateJSON
-          : { version: 1, lastEditedAtISO: new Date().toISOString(), prep: { answers: {} }, agenda: { items: [] } };
+        
+        // Coerce/parse meta.stateJSON from the API
+        let sj = meta.stateJSON;
+        if (sj && typeof sj === 'string') {
+          try { sj = JSON.parse(sj); } catch { sj = null; }
+        }
+        if (!sj || typeof sj !== 'object') {
+          sj = { version: 1, lastEditedAtISO: new Date().toISOString(), prep: { answers: {} }, agenda: { items: [] } };
+        }
+        state.stateJSON = sj;
+        
+        console.log('stateJSON (parsed):', state.stateJSON);
+
 
   
         // Names in header/step 2/landing
