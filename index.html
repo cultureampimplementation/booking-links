@@ -256,7 +256,13 @@
     .inline-controls{ display:flex; gap:8px; align-items:center; margin:12px 0 4px; justify-content:center; }
     .inline-title{ font-weight:800; margin:12px 0 6px; }
 
-
+    /* Step 2 — Agenda look & feel */
+    #step2 .agenda-wrap{ max-width:320px; }
+    #step2 .agenda-title{ font-weight:800; margin:12px 0 6px; }
+    #step2 .agenda-list{ display:grid; gap:8px; }
+    #step2 .agenda-input-row{ display:flex; gap:8px; margin-top:8px; }
+    #step2 .agenda-input-row input[type="text"]{ flex:1; }
+    #step2 .agenda-wrap .sel-item input[type="text"]{ width:100%; min-width:0; }
 
   </style>
 </head>
@@ -1412,128 +1418,130 @@ function renderWeek(payload) {
     validateStep2Complete();
   }
 
+function renderAgenda() {
+  const container = document.createElement('div');
+  container.className = 'agenda-wrap';
+  container.style.marginTop = '16px';
 
-  function renderAgenda() {
-    const container = document.createElement('div');
-    container.style.marginTop = '16px';
-  
-    const title = document.createElement('div');
-    title.className = 'cq-title';
-    title.textContent = 'Your agenda (optional)';
-    container.appendChild(title);
-  
-    const list = document.createElement('div');
-    list.id = 'agendaList';
-    list.style.display = 'grid';
-    list.style.gap = '8px';
-    container.appendChild(list);
-  
-    const addRow = document.createElement('div');
-    addRow.style.display = 'flex';
-    addRow.style.gap = '8px';
-    addRow.style.marginTop = '8px';
-  
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.placeholder = 'Add an agenda item…';
-    input.style.flex = '1';
-    const addBtn = document.createElement('button');
-    addBtn.className = 'btn';
-    addBtn.textContent = 'Add';
-  
-    addRow.append(input, addBtn);
-    container.appendChild(addRow);
-  
-    const mount = document.getElementById('s2Questions');
-    mount.appendChild(container);
-  
-    function paint() {
-      list.innerHTML = '';
-      const items = (state.stateJSON?.agenda?.items || []).slice().sort((a,b)=> (a.order ?? 0) - (b.order ?? 0));
-      items.forEach((it, idx) => {
-        const row = document.createElement('div');
-        row.className = 'sel-item';
-  
-        const left = document.createElement('div');
-        left.style.display = 'flex';
-        left.style.gap = '8px';
-        left.style.alignItems = 'center';
-  
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = !!it.done;
-        cb.onchange = () => {
-          it.done = cb.checked;
-          it.updatedAtISO = new Date().toISOString();
-          saveStatePatch({ agendaUpdate: { id: it.id, done: it.done } }).catch(console.error);
-        };
-  
-        const txt = document.createElement('input');
-        txt.type = 'text';
-        txt.value = it.text;
-        txt.style.minWidth = '240px';
-        txt.onchange = () => {
-          it.text = txt.value.trim();
-          it.updatedAtISO = new Date().toISOString();
-          saveStatePatch({ agendaUpdate: { id: it.id, text: it.text } }).catch(console.error);
-        };
-  
-        left.append(cb, txt);
-  
-        const controls = document.createElement('div');
-        controls.style.display = 'flex';
-        controls.style.gap = '6px';
-  
-        const up = document.createElement('button'); up.className = 'link-btn'; up.textContent = '↑';
-        up.onclick = () => move(idx, -1);
-  
-        const down = document.createElement('button'); down.className = 'link-btn'; down.textContent = '↓';
-        down.onclick = () => move(idx, +1);
-  
-        const del = document.createElement('button'); del.className = 'link-btn'; del.textContent = 'Remove';
-        del.onclick = () => {
-          saveStatePatch({ agendaRemove: { id: it.id } }).then(res => {
-            // server returns merged state; local state will be replaced in save helper
-            paint();
-          }).catch(console.error);
-        };
-  
-        controls.append(up, down, del);
-        row.append(left, controls);
-        list.appendChild(row);
-      });
-    }
-  
-    function move(idx, delta) {
-      const items = (state.stateJSON?.agenda?.items || []).slice().sort((a,b)=> (a.order ?? 0) - (b.order ?? 0));
-      const j = idx + delta;
-      if (j < 0 || j >= items.length) return;
-      const tmp = items[idx].order;
-      items[idx].order = items[j].order;
-      items[j].order = tmp;
-      // push new order to server
-      const ids = items.sort((a,b)=> (a.order ?? 0) - (b.order ?? 0)).map(x => x.id);
-      saveStatePatch({ agendaReorder: { ids } }).then(res => {
-        // state.stateJSON replaced in save helper
-        paint();
-      }).catch(console.error);
-    }
-  
-    addBtn.onclick = () => {
-      const text = String(input.value || '').trim();
-      if (!text) return;
-      input.value = '';
-      saveStatePatch({ agendaAdd: { text } }).then(res => {
-        paint();
-      }).catch(console.error);
-    };
-  
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); addBtn.click(); }
+  const title = document.createElement('div');
+  title.className = 'agenda-title';
+  title.textContent = 'Your agenda (optional)';
+  container.appendChild(title);
+
+  const list = document.createElement('div');
+  list.id = 'agendaList';
+  list.className = 'agenda-list';
+  container.appendChild(list);
+
+  const addRow = document.createElement('div');
+  addRow.className = 'agenda-input-row';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'Add an agenda item…';
+
+  const addBtn = document.createElement('button');
+  addBtn.className = 'btn';
+  addBtn.textContent = 'Add';
+
+  addRow.append(input, addBtn);
+  container.appendChild(addRow);
+
+  const mount = document.getElementById('s2Questions');
+  mount.appendChild(container);
+
+  function paint() {
+    list.innerHTML = '';
+    const items = (state.stateJSON?.agenda?.items || [])
+      .slice()
+      .sort((a,b)=> (a.order ?? 0) - (b.order ?? 0));
+
+    items.forEach((it, idx) => {
+      const row = document.createElement('div');
+      row.className = 'sel-item';
+
+      // LEFT: editable text only (no checkbox)
+      const left = document.createElement('div');
+      left.style.display = 'flex';
+      left.style.gap = '8px';
+      left.style.alignItems = 'center';
+      left.style.flex = '1';
+
+      const txt = document.createElement('input');
+      txt.type = 'text';
+      txt.value = it.text;
+      txt.onchange = () => {
+        const newText = String(txt.value || '').trim();
+        if (newText === it.text) return;
+        it.text = newText;
+        it.updatedAtISO = new Date().toISOString();
+        saveStatePatch({ agendaUpdate: { id: it.id, text: it.text } }).catch(console.error);
+      };
+
+      left.append(txt);
+
+      // RIGHT: controls
+      const controls = document.createElement('div');
+      controls.style.display = 'flex';
+      controls.style.gap = '6px';
+      controls.style.flexShrink = '0';
+
+      const up = document.createElement('button'); up.className = 'link-btn'; up.textContent = '↑';
+      up.onclick = () => move(idx, -1);
+
+      const down = document.createElement('button'); down.className = 'link-btn'; down.textContent = '↓';
+      down.onclick = () => move(idx, +1);
+
+      const del = document.createElement('button'); del.className = 'link-btn'; del.textContent = 'Remove';
+      del.onclick = () => {
+        saveStatePatch({ agendaRemove: { id: it.id } })
+          .then(() => paint())
+          .catch(console.error);
+      };
+
+      controls.append(up, down, del);
+      row.append(left, controls);
+      list.appendChild(row);
     });
-  
-    paint();
   }
+
+  function move(idx, delta) {
+    const items = (state.stateJSON?.agenda?.items || [])
+      .slice()
+      .sort((a,b)=> (a.order ?? 0) - (b.order ?? 0));
+
+    const j = idx + delta;
+    if (j < 0 || j >= items.length) return;
+
+    const tmp = items[idx].order;
+    items[idx].order = items[j].order;
+    items[j].order = tmp;
+
+    const ids = items
+      .sort((a,b)=> (a.order ?? 0) - (b.order ?? 0))
+      .map(x => x.id);
+
+    saveStatePatch({ agendaReorder: { ids } })
+      .then(() => paint())
+      .catch(console.error);
+  }
+
+  addBtn.onclick = () => {
+    const text = String(input.value || '').trim();
+    if (!text) return;
+    input.value = '';
+    saveStatePatch({ agendaAdd: { text } })
+      .then(() => paint())
+      .catch(console.error);
+  };
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addBtn.click(); }
+  });
+
+  paint();
+}
+
 
 function validateStep2Complete() {
   const doneBtn = document.getElementById('s2DoneBtn');
