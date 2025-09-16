@@ -1268,10 +1268,6 @@ function renderWeek(payload) {
     
       // (Optional but nice) optimistic UI: stamp Step 1 + hide week immediately
       if (!state.meta) state.meta = {};
-      state.meta.bookedStartISO = slot.start.toISOString();
-      state.meta.bookedEndISO   = slot.end.toISOString();
-      state.meta.selectedStartsJSON = [slot.start.toISOString()];
-      state.meta.status = 'USED';
       refreshLandingCards();
       document.querySelectorAll('#weekView .week-wrap, #landingInline .week-wrap')
         .forEach(el => el.classList.add('hide'));
@@ -1295,22 +1291,40 @@ function renderWeek(payload) {
       };
     
       try {
-        // ⬇️ Use preShown:true because the loader is already visible.
-        await runBlocking(
+        const resp = await runBlocking(
           () => apiPost('reserveSlots', { token }, { slots: [iso], extra }),
-          {
-            startMsg: 'Booking the session...',
-            slowMsg:  'Booking prep time...',
-            slowAfterMs: 3000,
-            preShown: true
-          }
+          { startMsg: 'Booking the session...', slowMsg: 'Booking prep time...', slowAfterMs: 3000, preShown: true }
         );
-    
-        // success
+      
+        const c = resp?.confirmed?.[iso];
+      
+        if (c) {
+          // keep local “meta” in sync so Step 1 card renders from real data
+          state.meta.bookedStartISO = c.start;
+          state.meta.bookedEndISO   = c.end || (slot ? slot.end.toISOString() : '');
+          state.meta.selectedStartsJSON = [c.start];
+          state.meta.status = 'USED';
+      
+          // hydrate the slot used by Step 2 subtitle
+          slot.start = new Date(c.start);
+          slot.end   = new Date(c.end || slot.end?.toISOString() || c.start);
+      
+          if (c.prep?.start && c.prep?.end) {
+            slot.prep = {
+              start: new Date(c.prep.start),
+              end:   new Date(c.prep.end)
+            };
+          }
+        }
+      
+        // Update Step 1 card with real data
+        refreshLandingCards();
+      
+        // Success UI + Step 2 render
         confirmBtn.classList.add('success');
         confirmBtn.textContent = 'Booked!';
         renderStep2FromSlot(slot);
-    
+      
         setTimeout(() => {
           confirmModal.style.display = 'none';
           pendingIso = null; pendingPill = null;
@@ -1362,7 +1376,7 @@ function renderWeek(payload) {
     const colleagueName =
       state?.meta?.colleagueFirstName ||
       state?.meta?.colleagueEmail ||
-      'your People Scientist';
+      'your Culture Amp contact';
   
     if (s2Colleague) s2Colleague.textContent = colleagueName;
   
@@ -1376,8 +1390,7 @@ function renderWeek(payload) {
         const ps = slot.prep.start;
         const startTime = fmtTimeLocal(ps, state.tz).replace(':','h');
         s2Sub.textContent =
-          `We've held a preparation slot for ${colleagueName} on ${fmtDateLocal(ps, state.tz)} at ${startTime}. ` +
-          `Answering the questions below will help them in their preparations.`;
+          "We've held a preparation slot for ... on ${fmtDateLocal(ps)} at ${startTime}. Answering the questions below will help them in their preparations.";
         s2Sub.style.display = '';
       } else if (hasQs && !hasPrep){
         s2Sub.textContent = `Answering the questions below will help them in their preparation.`;
