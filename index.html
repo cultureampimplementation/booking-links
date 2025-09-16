@@ -1364,6 +1364,16 @@ function renderWeek(payload) {
   };
 
 function renderStep2FromSlot(slot) {
+  // 🔧 Clear the Step 2 content before re-rendering to avoid duplicates
+  const s2Q = document.getElementById('s2Questions');
+  if (s2Q) s2Q.innerHTML = '';
+
+  // (optional, if you sometimes re-write the banner)
+  const s2Sub = document.getElementById('s2Sub');
+  if (s2Sub) {
+    // leave styling alone; we'll just let later code rewrite its inner HTML
+  }
+
   state.lastBooked = slot ? { start: slot.start, end: slot.end } : null;
   state.lastPrep   = (slot && slot.prep) ? { start: slot.prep.start, end: slot.prep.end } : null;
   state.stage = 'postBook';
@@ -1373,7 +1383,7 @@ function renderStep2FromSlot(slot) {
   document.getElementById('step2')?.classList.remove('hide');
 
   const s2Colleague = document.getElementById('s2Colleague');
-  const s2Sub       = document.getElementById('s2Sub');
+  const s2SubEl     = document.getElementById('s2Sub');
 
   const colleagueName =
     state?.meta?.colleagueFirstName ||
@@ -1382,48 +1392,13 @@ function renderStep2FromSlot(slot) {
 
   if (s2Colleague) s2Colleague.textContent = colleagueName;
 
-  // Build the single prep card (bold line + optional inline hint)
-  const hasQs   = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length > 0;
-  const hasPrep = !!(slot && slot.prep && slot.prep.start && slot.prep.end);
-
-  if (s2Sub) {
-    s2Sub.classList.remove('prep-card');
-    s2Sub.style.display = 'none';
-
-    if (hasQs) {
-      // Top/bold line
-      let top;
-      if (hasPrep) {
-        const ps = slot.prep.start;
-        const startTime = fmtTimeLocal(ps, state.tz).replace(':','h');
-        top = `We've held a preparation slot for ${colleagueName} on ${fmtDateLocal(ps, state.tz)} at ${startTime}. ` +
-              `Answering the questions below will help them in their preparation.`;
-      } else {
-        top = `Answering the questions below will help them in their preparation.`;
-      }
-
-      // Inline required hint (in brackets), if any
-      const missing = missingRequiredCount ? missingRequiredCount() : 0;
-      const hint = (missing > 0)
-        ? `(${missing === 1 ? '1 required question is unanswered.' : `${missing} required questions are unanswered.`})`
-        : '';
-
-      s2Sub.classList.add('prep-card');
-      s2Sub.innerHTML = `
-        <div class="prep-banner"><strong>${top}</strong></div>
-        ${hint ? `<div class="prep-hint">${hint}</div>` : ''}
-        <div id="s2QMount"></div>
-      `;
-      s2Sub.style.display = '';
-    }
-  }
-
+  // (existing banner + questions + agenda)
   renderStep2Questions(slot);
   renderAgenda(slot);
 
   const saveBtn = document.getElementById('s2SaveBtn');
   if (saveBtn) saveBtn.onclick = () => saveSnapshot();
-  updateSaveUI(); // keep this; if you later want live hint updates, you can refresh .prep-hint here.
+  updateSaveUI();
 }
 
 function renderStep2Questions(slot) {
@@ -1976,30 +1951,31 @@ function renderAgenda(){
         showRebook: !!meta.allowRebook,
         extraClass: 'booked'
       });
+    
+      // Build a slot object once from meta
+      const prepFromMeta =
+        (state.meta?.bookedPrepStartISO && state.meta?.bookedPrepEndISO)
+          ? { start: new Date(state.meta.bookedPrepStartISO),
+              end:   new Date(state.meta.bookedPrepEndISO) }
+          : null;
+    
+      const slot = sel ? {
+        start: sel,
+        end: end,
+        ...(prepFromMeta ? { prep: prepFromMeta } : {})
+      } : null;
+    
+      // Auto-render Step 2 now
+      if (slot) renderStep2FromSlot(slot);
+    
+      // Render the Step 2 card but make it a no-op on click
       setStepCard(s2, {
         state: 'active',
         title: 'Step 2',
         body: `Share some details below, so ${colleagueFirst} can prepare.`,
-        onClick: () => {
-          // Open Step 2 using the booked slot context (synthesized if needed)
-            const prepFromMeta =
-            (state.meta?.bookedPrepStartISO && state.meta?.bookedPrepEndISO)
-              ? { start: new Date(state.meta.bookedPrepStartISO),
-                  end:   new Date(state.meta.bookedPrepEndISO) }
-              : null;
-          
-          const slot = sel ? {
-            start: sel,
-            end: end,
-            ...(prepFromMeta ? { prep: prepFromMeta } : {})
-          } : null;
-
-          if (slot) renderStep2FromSlot(slot);
-          document.getElementById('step2')?.classList.remove('hide');
-          document.getElementById('overviewView')?.classList.add('hide');
-          document.getElementById('weekView')?.classList.add('hide');
-        }
+        onClick: undefined   // ← button visually active, but does nothing
       });
+    
       return;
     }
   
@@ -2015,6 +1991,7 @@ function renderAgenda(){
       title: 'Step 2',
       body: 'The meeting booked with this link is in the past'
     });
+    document.getElementById('step2')?.classList.add('hide');
   }
 
   function interp(str, ctx={}) {
