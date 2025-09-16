@@ -1535,24 +1535,31 @@ function renderWeek(payload) {
     paint();
   }
 
-  
-  function validateStep2Complete() {
-    const doneBtn = document.getElementById('s2DoneBtn');
-    const qs = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length
-      ? state.confirmQuestions
-      : (state.confirmQuestion ? [state.confirmQuestion] : []);
-  
-    // All required need a checked value
-    const ok = (qs || []).every((q, idx) => {
-      if (!q || !q.required) return true;
-      const group = `s2_${(q.key || ('q'+idx))}`.replace(/\W+/g,'_');
-      const chosen = document.querySelector(`#s2Questions input[name="${group}"]:checked`);
-      return !!(chosen && chosen.value);
-    });
-  
-    doneBtn.disabled = !ok;
+function validateStep2Complete() {
+  const doneBtn = document.getElementById('s2DoneBtn');
+
+  // Source of truth: the question list
+  const qs = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length
+    ? state.confirmQuestions
+    : (state.confirmQuestion ? [state.confirmQuestion] : []);
+
+  // If there are no questions, you're done
+  if (!qs.length) {
+    doneBtn.disabled = false;
+    return;
   }
 
+  // Answers live in state.stateJSON.prep.answers
+  const answers = state.stateJSON?.prep?.answers || {};
+
+  const ok = qs.every((q, idx) => {
+    if (!q?.required) return true;
+    const key = String(q.key || ('q' + idx));
+    return !!answers[key];
+  });
+
+  doneBtn.disabled = !ok;
+}
 
   async function fetchWeekAtGranularity(mondayKey, g) {
     const res = await apiGet('fetchWeek', { token, mondayKey, g });
