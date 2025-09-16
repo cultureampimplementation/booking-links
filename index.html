@@ -1388,9 +1388,9 @@ function renderStep2Questions(slot) {
     ? state.confirmQuestions
     : (state.confirmQuestion ? [state.confirmQuestion] : []);
 
-  // if no questions, leave the container empty (we’ll still show the agenda below)
+  // no questions → leave container empty (agenda will render), but keep Save active if dirty
   if (!qs.length) {
-    doneBtn.disabled = !areRequiredQuestionsAnswered();
+    updateSaveButton();
     return;
   }
 
@@ -1428,8 +1428,7 @@ function renderStep2Questions(slot) {
         state.stateJSON.prep.answers[key] = rendered;
         state.stateJSON.lastEditedAtISO = new Date().toISOString();
         prepDirty = true;
-        doneBtn.disabled = !areRequiredQuestionsAnswered();
-        markDirty();
+        markDirty();          // this will call updateSaveButton()
       });
 
       const lab = document.createElement('label');
@@ -1443,7 +1442,8 @@ function renderStep2Questions(slot) {
     container.appendChild(block);
   });
 
-  doneBtn.disabled = !areRequiredQuestionsAnswered();
+  // never disable Save here — it’s controlled by dirty state
+  updateSaveButton();
 }
 
 function renderAgenda(){
@@ -2589,20 +2589,6 @@ function markClean(){
     setTimeout(() => { btn.textContent = 'Save'; updateSaveButton(); }, 900);
   }
   updateSaveButton();
-}
-
-function areRequiredQuestionsAnswered(){
-  const qs = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length
-    ? state.confirmQuestions
-    : (state.confirmQuestion ? [state.confirmQuestion] : []);
-
-  if (!qs.length) return true; // nothing required
-  const answers = state.stateJSON?.prep?.answers || {};
-  return qs.every((q, idx) => {
-    if (!q?.required) return true;
-    const key = String(q.key || ('q' + idx));
-    return !!answers[key];
-  });
 }
 
 function missingRequiredCount(){
