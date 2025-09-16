@@ -369,8 +369,12 @@
   
       <div id="s2Questions" class="notice" style="margin-top:12px;"></div>
       <footer style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+        <span id="s2ReqHint" class="notice" style="margin-right:auto;display:none;">
+          <!-- filled by JS -->
+        </span>
         <button class="btn" id="s2DoneBtn" disabled>Save</button>
       </footer>
+
     </div>
   </div>
 
@@ -2561,7 +2565,6 @@ async function saveSnapshot(){
   }
 }
 
-
 // optional autosave (keep or remove)
 const saveSnapshotDebounced = makeDebounce(() => saveSnapshot().catch(()=>{}), 800);
 
@@ -2570,12 +2573,9 @@ let agendaDirty = false;
 let prepDirty   = false;
 
 function markDirty(){
-  // any change in agenda or prep calls this
   const btn = document.getElementById('s2DoneBtn');
-  if (btn){
-    btn.disabled = !areRequiredQuestionsAnswered();
-    btn.textContent = 'Save';
-  }
+  if (btn) btn.textContent = 'Save';
+  updateSaveButton();
 }
 
 function markClean(){
@@ -2584,9 +2584,10 @@ function markClean(){
   const btn = document.getElementById('s2DoneBtn');
   if (btn){
     btn.textContent = 'Saved ✓';
-    btn.disabled = !areRequiredQuestionsAnswered();
-    setTimeout(()=>{ btn.textContent = 'Save'; }, 900);
+    // revert label after a moment
+    setTimeout(() => { btn.textContent = 'Save'; updateSaveButton(); }, 900);
   }
+  updateSaveButton();
 }
 
 function areRequiredQuestionsAnswered(){
@@ -2601,6 +2602,37 @@ function areRequiredQuestionsAnswered(){
     const key = String(q.key || ('q' + idx));
     return !!answers[key];
   });
+}
+
+function missingRequiredCount(){
+  const qs = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length
+    ? state.confirmQuestions
+    : (state.confirmQuestion ? [state.confirmQuestion] : []);
+  if (!qs.length) return 0;
+  const answers = state.stateJSON?.prep?.answers || {};
+  let missing = 0;
+  qs.forEach((q, idx) => {
+    if (!q?.required) return;
+    const key = String(q.key || ('q' + idx));
+    if (!answers[key]) missing++;
+  });
+  return missing;
+}
+
+function updateSaveButton(){
+  const btn  = document.getElementById('s2DoneBtn');
+  const hint = document.getElementById('s2ReqHint');
+  if (btn) {
+    // Save is enabled whenever there are unsaved changes
+    btn.disabled = !(agendaDirty || prepDirty);
+  }
+  if (hint){
+    const m = missingRequiredCount();
+    hint.style.display = m > 0 ? '' : 'none';
+    hint.textContent = m === 1
+      ? '1 required question is unanswered.'
+      : `${m} required questions are unanswered.`;
+  }
 }
 
 
