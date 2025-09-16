@@ -1807,44 +1807,6 @@ function renderWeek(payload) {
     return (sel > new Date()) ? 'USED_FUTURE' : 'USED_PAST';
   }
   
-  function setStepCard(el, {state, title, body, onClick, showRebook, extraClass}) {
-    el.classList.remove('active','locked','inactive','booked'); // ← also remove 'booked'
-    el.classList.add(state);
-    if (extraClass) el.classList.add(extraClass);               // ← add it if requested
-  
-    el.innerHTML = `
-      <h3>${escapeHtml(title)}</h3>
-      <p>${escapeHtml(body)}</p>
-      ${showRebook ? `<div class="step-subtle" id="rebookLink">Rebook</div>` : '' }
-    `;
-  
-    el.onclick = null;
-    if (state === 'active' && typeof onClick === 'function') {
-      el.onclick = onClick;
-    } else if (showRebook) {
-      el.querySelector('#rebookLink')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        showInlineOverview();
-      });
-    }
-  }
-
-  /**********************
-   * Inline Quarter + Week (on the landing page)
-   **********************/
-    
-  // figure out which quarter is "current" (closest to today)
-  function findCurrentQuarterIndex(quarters) {
-    if (!quarters?.length) return 0;
-    const now = new Date();
-    const y = now.getUTCFullYear();
-    const m = now.getUTCMonth() + 1;
-    const q = Math.floor((m - 1) / 3) + 1;
-    const key = `${y}-Q${q}`;
-    const i = quarters.findIndex(qr => qr.key === key);
-    return i >= 0 ? i : 0;
-  }
-  
 /**********************
  * Inline Quarter + Week (landing page, "See more" appends)
  **********************/
