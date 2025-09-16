@@ -256,12 +256,24 @@
     .inline-controls{ display:flex; gap:8px; align-items:center; margin:12px 0 4px; justify-content:center; }
     .inline-title{ font-weight:800; margin:12px 0 6px; }
 
-    /* Step 2 — Agenda look & feel */
-    #step2 .agenda-wrap{ max-width:320px; }
+    /* Step 2 — Agenda look & feel (wider, minimalist rows) */
+    #step2 .agenda-wrap{ max-width:652px; }
     #step2 .agenda-title{ font-weight:800; margin:12px 0 6px; }
-    #step2 .agenda-list{ display:grid; gap:8px; }
-    #step2 .agenda-input-row{ display:flex; gap:8px; margin-top:8px; }
+    #step2 .agenda-list{ display:grid; }
+    #step2 .agenda-input-row{ display:flex; gap:8px; margin-top:8px; max-width:652px; }
     #step2 .agenda-input-row input[type="text"]{ flex:1; }
+    
+    /* Minimal rows (override the generic .sel-item box style) */
+    #step2 .agenda-wrap .sel-item{
+      background: transparent;
+      border: none;
+      padding: 6px 0;
+      border-bottom: 1px solid #eee;
+    }
+    #step2 .agenda-wrap .sel-item:last-child{ border-bottom: none; }
+    #step2 .agenda-wrap .agenda-text{ font-weight:600; }
+    #step2 .agenda-wrap .agenda-actions{ display:flex; gap:6px; flex-shrink:0; opacity:.7; }
+    #step2 .agenda-wrap .sel-item:hover .agenda-actions{ opacity:1; }
     #step2 .agenda-wrap .sel-item input[type="text"]{ width:100%; min-width:0; }
 
   </style>
@@ -1447,8 +1459,10 @@ function renderAgenda() {
   addRow.append(input, addBtn);
   container.appendChild(addRow);
 
-  const mount = document.getElementById('s2Questions');
-  mount.appendChild(container);
+  document.getElementById('s2Questions').appendChild(container);
+
+  // local UI-only edit state (not persisted)
+  const editing = new Set();
 
   function paint() {
     list.innerHTML = '';
@@ -1460,47 +1474,78 @@ function renderAgenda() {
       const row = document.createElement('div');
       row.className = 'sel-item';
 
-      // LEFT: editable text only (no checkbox)
       const left = document.createElement('div');
       left.style.display = 'flex';
-      left.style.gap = '8px';
       left.style.alignItems = 'center';
       left.style.flex = '1';
+      left.style.gap = '8px';
 
-      const txt = document.createElement('input');
-      txt.type = 'text';
-      txt.value = it.text;
-      txt.onchange = () => {
-        const newText = String(txt.value || '').trim();
-        if (newText === it.text) return;
-        it.text = newText;
-        it.updatedAtISO = new Date().toISOString();
-        saveStatePatch({ agendaUpdate: { id: it.id, text: it.text } }).catch(console.error);
-      };
+      const actions = document.createElement('div');
+      actions.className = 'agenda-actions';
 
-      left.append(txt);
+      // view vs edit mode
+      const isEditing = editing.has(it.id);
 
-      // RIGHT: controls
-      const controls = document.createElement('div');
-      controls.style.display = 'flex';
-      controls.style.gap = '6px';
-      controls.style.flexShrink = '0';
+      if (!isEditing) {
+        const label = document.createElement('span');
+        label.className = 'agenda-text';
+        label.textContent = it.text || 'Untitled';
+        left.append(label);
 
-      const up = document.createElement('button'); up.className = 'link-btn'; up.textContent = '↑';
-      up.onclick = () => move(idx, -1);
+        const edit = document.createElement('button');
+        edit.className = 'link-btn';
+        edit.textContent = 'Edit';
+        edit.onclick = () => { editing.add(it.id); paint(); };
 
-      const down = document.createElement('button'); down.className = 'link-btn'; down.textContent = '↓';
-      down.onclick = () => move(idx, +1);
+        const up = document.createElement('button'); up.className = 'link-btn'; up.textContent = '↑';
+        up.onclick = () => move(idx, -1);
 
-      const del = document.createElement('button'); del.className = 'link-btn'; del.textContent = 'Remove';
-      del.onclick = () => {
-        saveStatePatch({ agendaRemove: { id: it.id } })
-          .then(() => paint())
-          .catch(console.error);
-      };
+        const down = document.createElement('button'); down.className = 'link-btn'; down.textContent = '↓';
+        down.onclick = () => move(idx, +1);
 
-      controls.append(up, down, del);
-      row.append(left, controls);
+        const del = document.createElement('button'); del.className = 'link-btn'; del.textContent = 'Remove';
+        del.onclick = () => {
+          saveStatePatch({ agendaRemove: { id: it.id } })
+            .then(() => { editing.delete(it.id); paint(); })
+            .catch(console.error);
+        };
+
+        actions.append(edit, up, down, del);
+      } else {
+        const txt = document.createElement('input');
+        txt.type = 'text';
+        txt.value = it.text || '';
+        txt.placeholder = 'Agenda item';
+        txt.onkeydown = (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); save(); }
+          if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+        };
+        left.append(txt);
+
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'link-btn';
+        saveBtn.textContent = 'Save';
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'link-btn';
+        cancelBtn.textContent = 'Cancel';
+
+        const save = () => {
+          const newText = String(txt.value || '').trim();
+          if (newText === it.text) { editing.delete(it.id); paint(); return; }
+          saveStatePatch({ agendaUpdate: { id: it.id, text: newText } })
+            .then(() => { editing.delete(it.id); paint(); })
+            .catch(console.error);
+        };
+        const cancel = () => { editing.delete(it.id); paint(); };
+
+        saveBtn.onclick = save;
+        cancelBtn.onclick = cancel;
+        actions.append(saveBtn, cancelBtn);
+        // focus after buttons wired
+        setTimeout(() => txt.focus(), 0);
+      }
+
+      row.append(left, actions);
       list.appendChild(row);
     });
   }
@@ -1531,7 +1576,12 @@ function renderAgenda() {
     if (!text) return;
     input.value = '';
     saveStatePatch({ agendaAdd: { text } })
-      .then(() => paint())
+      .then((res) => {
+        // try to open the newly-added row in edit mode (nice for quick tweaks)
+        const added = res?.addedId;
+        if (added) editing.add(added);
+        paint();
+      })
       .catch(console.error);
   };
 
@@ -1541,7 +1591,6 @@ function renderAgenda() {
 
   paint();
 }
-
 
 function validateStep2Complete() {
   const doneBtn = document.getElementById('s2DoneBtn');
