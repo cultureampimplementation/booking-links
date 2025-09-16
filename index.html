@@ -1570,33 +1570,36 @@ function renderAgenda(){
         edit.textContent = 'Edit';
         edit.onclick = () => { editing.add(it.id); paint(); };
 
+        // ↑ move up
         const up = document.createElement('button');
         up.className = 'link-btn';
         up.textContent = '↑';
         up.onclick = () => {
-          if (idx === 0) return;
           const arr = items();
+          if (idx === 0) return;               // already at top
           const a = arr[idx], b = arr[idx-1];
+          // swap their order values
           const tmp = a.order; a.order = b.order; b.order = tmp;
-          applyOrder(arr);
+          // normalize to 1..N based on order
+          renumberOrders();
           markDirty();
-          // saveSnapshotDebounced();
           paint();
         };
-
+        
+        // ↓ move down
         const down = document.createElement('button');
         down.className = 'link-btn';
         down.textContent = '↓';
         down.onclick = () => {
           const arr = items();
-          if (idx >= arr.length-1) return;
+          if (idx >= arr.length - 1) return;   // already at bottom
           const a = arr[idx], b = arr[idx+1];
           const tmp = a.order; a.order = b.order; b.order = tmp;
-          applyOrder(arr);
+          renumberOrders();
           markDirty();
-          // saveSnapshotDebounced();
           paint();
         };
+
 
         const del = document.createElement('button');
         del.className = 'link-btn';
