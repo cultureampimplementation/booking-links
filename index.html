@@ -1233,9 +1233,9 @@ function renderWeek(payload) {
         await runBlocking(
           () => apiPost('reserveSlots', { token }, { slots: [iso], extra }),
           {
-            startMsg: 'Booking your time…',
-            slowMsg:  'Still working… calendars can be slow.',
-            slowAfterMs: 1500,
+            startMsg: 'Booking the session...',
+            slowMsg:  'Booking prep time...',
+            slowAfterMs: 3000,
             preShown: true
           }
         );
