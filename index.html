@@ -1411,7 +1411,7 @@ function renderWeek(payload) {
           state.stateJSON.prep.answers[key] = rendered;
           state.stateJSON.lastEditedAtISO = new Date().toISOString();
           // persist (debounced)
-          saveStatePatchDebounced({ set: { path: `prep.answers.${key}`, value: rendered } });
+          saveSnapshotDebounced();
           validateStep2Complete();
         });
   
