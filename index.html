@@ -1425,29 +1425,12 @@ function renderStep2FromSlot(slot) {
   updateSaveUI(); // keep this; if you later want live hint updates, you can refresh .prep-hint here.
 }
 
-
 function renderStep2Questions(slot) {
-  const container = document.getElementById('s2Questions');
-  container.innerHTML = '';
+  const mount = document.getElementById('s2QMount') || document.getElementById('s2Questions');
+  mount.innerHTML = '';  // clear within the single card
 
   const prep = slot?.prep || null;
-
-  const ctx = {
-    colleagueName:      state.meta?.colleagueFirstName || state.meta?.colleagueEmail || '',
-    colleagueFirstName: state.meta?.colleagueFirstName || '',
-    colleagueEmail:     state.meta?.colleagueEmail || '',
-    customerName:       state.meta?.customerName || '',
-    meetingType:        state.meta?.meetingType || '',
-    meetingDate:        slot ? fmtDateLocal(slot.start, state.tz) : '',
-    meetingTime:        slot ? fmtRangeLocal(slot.start, slot.end, state.tz) : '',
-    tz:                 state.tz,
-    prepDate:           prep ? fmtDateLocal(prep.start, state.tz) : '',
-    prepTime:           prep ? fmtRangeLocal(prep.start, prep.end, state.tz) : '',
-    prepDurationMins:   prep ? Math.round((prep.end - prep.start)/60000)
-                             : (state.meta?.options?.prepDurationMins ?? ''),
-    prepSameDay:        prep ? (ymdKey(prep.start, state.tz) === ymdKey(slot.start, state.tz) ? 'yes' : 'no') : '',
-    prepDayName:        prep ? new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, weekday:'long' }).format(prep.start) : ''
-  };
+  const ctx = { /* ...as you have it... */ };
 
   const qs = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length
     ? state.confirmQuestions
@@ -1457,10 +1440,7 @@ function renderStep2Questions(slot) {
 
   ensureStateShape();
 
-  // ⬇️ NEW: wrap all questions in a soft card
-  const card = document.createElement('div');
-  card.className = 'prep-card';
-
+  // no extra .prep-card wrapper here – just blocks
   qs.forEach((cq, idx) => {
     const key = String(cq?.key || (`q${idx}`));
     const block = document.createElement('div');
@@ -1504,10 +1484,9 @@ function renderStep2Questions(slot) {
       block.appendChild(row);
     });
 
-    card.appendChild(block);
+    mount.appendChild(block);
   });
 
-  container.appendChild(card);
   updateSaveUI();
 }
 
@@ -1963,8 +1942,10 @@ function renderAgenda(){
   
     const tz = state.tz || meta.initialTz || 'UTC';
     const sel = getPrimarySelectedStart(meta); // Date | null
+    const dur = Number(meta.durationMins || 30);
     const end = meta.bookedEndISO ? new Date(meta.bookedEndISO)
-              : (sel ? new Date(sel.getTime() + 30*60000) : null);
+              : (sel ? new Date(sel.getTime() + dur*60000) : null);
+
   
     const whenDate = sel ? fmtDateLocal(sel, tz) : '';
     const whenTime = (sel && end) ? fmtRangeLocal(sel, end, tz) : '';
@@ -2000,7 +1981,18 @@ function renderAgenda(){
         body: `Share some details below, so ${colleagueFirst} can prepare.`,
         onClick: () => {
           // Open Step 2 using the booked slot context (synthesized if needed)
-          const slot = sel ? { start: sel, end: end } : null;
+            const prepFromMeta =
+            (state.meta?.bookedPrepStartISO && state.meta?.bookedPrepEndISO)
+              ? { start: new Date(state.meta.bookedPrepStartISO),
+                  end:   new Date(state.meta.bookedPrepEndISO) }
+              : null;
+          
+          const slot = sel ? {
+            start: sel,
+            end: end,
+            ...(prepFromMeta ? { prep: prepFromMeta } : {})
+          } : null;
+
           if (slot) renderStep2FromSlot(slot);
           document.getElementById('step2')?.classList.remove('hide');
           document.getElementById('overviewView')?.classList.add('hide');
@@ -2695,6 +2687,7 @@ function renderPrepBanner(slot){
   s2Sub.innerHTML = `
     <div class="prep-banner"><strong>${top}</strong></div>
     ${hint ? `<div class="prep-hint">${hint}</div>` : ''}
+    <div id="s2QMount"></div>
   `;
 }
 
