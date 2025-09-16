@@ -917,7 +917,7 @@ function generateWeeksForCurrentQuarter({
         if (!prefetch) alert('Failed to load week.\n' + (err && err.message ? err.message : String(err)));
         throw err;
       })
-      .finally(() => { if (pendingWeekKey === mondayKey) pendingWeekKey = null; hideLoading(); });
+      .finally(() => { if (pendingWeekKey === mondayKey) pendingWeekKey = null; });
   }
 
   function openWeek(mondayKey) {
