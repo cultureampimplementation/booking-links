@@ -1474,7 +1474,7 @@ function renderStep2Questions(slot) {
         input.type = 'text';
       }
       input.className = 's2-input';
-      input.placeholder = cq?.placeholder || '';
+      input.placeholder = interp(cq?.placeholder || '', ctx);
       if (maxLength) input.maxLength = maxLength;
       input.value = String(saved || '');
 
