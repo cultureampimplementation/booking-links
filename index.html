@@ -297,6 +297,19 @@
       margin-left: 0;                /* remove the right-push */
     }
 
+    /* Step 2 – Prep questions card */
+    .prep-card{
+      border: 1px solid #e5e7eb;          /* hairline */
+      border-radius: 12px;                 /* rounded */
+      background: #f9fafb;                 /* very light */
+      padding: 14px 16px;
+    }
+    .prep-card .cq-title{ font-weight: 700; margin: 6px 0 8px; }
+    .prep-card .cq-row{ display:flex; align-items:center; gap:8px; margin:6px 0; }
+    
+    /* nice spacing before the agenda */
+    .prep-card + .agenda-wrap{ margin-top:16px; }
+
   </style>
 </head>
 <body>
@@ -1407,13 +1420,13 @@ function renderStep2Questions(slot) {
     ? state.confirmQuestions
     : (state.confirmQuestion ? [state.confirmQuestion] : []);
 
-  // no questions → leave container empty (agenda will render), but keep Save active if dirty
-  if (!qs.length) {
-    updateSaveUI();
-    return;
-  }
+  if (!qs.length) { updateSaveUI(); return; }
 
   ensureStateShape();
+
+  // ⬇️ NEW: wrap all questions in a soft card
+  const card = document.createElement('div');
+  card.className = 'prep-card';
 
   qs.forEach((cq, idx) => {
     const key = String(cq?.key || (`q${idx}`));
@@ -1447,7 +1460,7 @@ function renderStep2Questions(slot) {
         state.stateJSON.prep.answers[key] = rendered;
         state.stateJSON.lastEditedAtISO = new Date().toISOString();
         prepDirty = true;
-        markDirty();          // this will call updateSaveUI()
+        markDirty();
       });
 
       const lab = document.createElement('label');
@@ -1458,10 +1471,10 @@ function renderStep2Questions(slot) {
       block.appendChild(row);
     });
 
-    container.appendChild(block);
+    card.appendChild(block);
   });
 
-  // never disable Save here — it’s controlled by dirty state
+  container.appendChild(card);
   updateSaveUI();
 }
 
@@ -1475,7 +1488,7 @@ function renderAgenda(){
 
   const title = document.createElement('div');
   title.className = 'agenda-title';
-  title.textContent = 'Add your questions to help shape the agenda below';
+  title.textContent = 'Agenda: Add your questions to help shape the agenda below';
   container.appendChild(title);
 
   const list = document.createElement('div');
