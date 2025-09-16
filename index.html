@@ -1651,22 +1651,6 @@ function renderAgenda(){
 }
 
 
-  addBtn.onclick = async () => {
-    const text = String(input.value || '').trim();
-    if (!text) return;
-    input.value = '';
-    const res = await saveStatePatch({ agendaAdd: { text } });
-    if (res && res.addedId) editing.add(res.addedId); // open it for immediate editing
-    paint();
-  };
-
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); addBtn.click(); }
-  });
-
-  paint();
-}
-
 
 function validateStep2Complete() {
   const doneBtn = document.getElementById('s2DoneBtn');
