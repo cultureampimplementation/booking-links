@@ -37,7 +37,6 @@
     .breadcrumb a { color: inherit; text-decoration: underline; cursor: pointer; }
 
     /* ===== Overview (Months with Week rows) ===== */
-    
     .ov-grid{
       display: grid;
       grid-template-columns: repeat(auto-fill, 320px);
@@ -45,15 +44,13 @@
       justify-content: start;
       margin-top: 12px;
     }
-
     .mcard{
       border: 1px solid #e0e0e0;
       border-radius: 12px;
       padding: 12px;
       background: #fff;
-      width: 100%;            /* was 320px */
-      box-sizing: border-box; /* include borders/padding in width */
-      /* optional safety: */
+      width: 100%;
+      box-sizing: border-box;
       min-width: 0;
       overflow: hidden;
     }
@@ -66,8 +63,7 @@
 
     /* Clickable week pill */
     .week-pill{
-      /* slightly darker default */
-      background:#ede9fe;           /* lavender */
+      background:#ede9fe;
       color:#0f172a;
       border:1px solid rgba(15,23,42,.10);
       border-radius:10px;
@@ -78,17 +74,12 @@
     }
     .week-pill:hover    { filter: brightness(1.02); }
     .week-pill:active   { transform: translateY(1px); }
-
-    /* Force contrasting text when bg is dark */
     .week-pill.lightText{ color:#fff; }
-
-    /* Zero availability: white with a hairline outline */
     .week-pill.zero{
       background:#fff; color:#0f172a;
       border-color:#e5e7eb; box-shadow:none; cursor:default;
     }
     .week-pill.zero:hover { filter: none; }
-
     .week-pill.disabled {
       background: #eef2f7;
       color: #6b7280;
@@ -115,14 +106,12 @@
     .past .date { color: #a0a0a0; }
 
     .heat { position:absolute; inset:0; z-index:0; border-radius:0; }
-
     .day-body { display: grid; grid-template-columns: 1fr; gap: 8px; position: relative; z-index: 1; }
     .pill { border: 1px solid #c7d6e6; background:#f7fbff; border-radius: 10px; padding: 8px 10px; min-height: 30px; display:flex; align-items:center; gap:8px; font-weight:600; font-size: 13px; justify-content: center; }
     .pill .icon { width: 1.1em; text-align:center; opacity:.55; }
     .pill .label { font-variant-numeric: tabular-nums; }
     .pill.selected { background:#0f3b59; color:#fff; border-color:#0f3b59; }
     .pill.selected .icon { opacity:1; }
-
     .banner { padding: 10px; margin-top: 10px; border: 1px dashed #d0d7e3; border-radius: 10px; text-align: center; color: #445; background: #f7f9ff; }
 
     /* utility */
@@ -147,14 +136,13 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 
     .heat { border-radius: 10px; padding: 10px 12px; border: 1px solid #e5e7eb; margin: 6px 0; }
-    .heat-0 { background: #f3f4f6; }           /* 0 / empty */
+    .heat-0 { background: #f3f4f6; }
     .heat-1 { background: #e8f1ff; }
     .heat-2 { background: #d6eaff; }
     .heat-3 { background: #c3e3ff; }
     .heat-4 { background: #b1dcff; }
-    .heat-5 { background: #9cd3ff; }           /* most */
+    .heat-5 { background: #9cd3ff; }
 
-    /* Confirm question styling */
     #confirmQuestionWrap { font-size: 13px; color: #666; }
     #confirmQuestionWrap .cq-title { font-weight: 700; margin: 8px 0 6px; }
     #confirmQuestionWrap .cq-row { display:flex; align-items:center; gap:8px; margin:4px 0; }
@@ -167,33 +155,26 @@
       padding: 18px; display:flex; gap:14px; align-items:flex-start;
       box-shadow: 0 2px 10px rgba(0,0,0,.04);
     }
-    
-    /* Green tick on soft-green square */
     .used-icon {
       display: inline-grid; place-items: center;
-      width: 40px; height: 40px;                    /* square */
+      width: 40px; height: 40px;
       border-radius: 10px;
       font-size: 22px; line-height: 1;
-      background:#e8f5e9;                           /* light green */
-      color:#166534;                                 /* dark green text */
-      border:1px solid #b7dfc2;                      /* soft green border */
-      padding:0;                                     /* square, not pill */
+      background:#e8f5e9;
+      color:#166534;
+      border:1px solid #b7dfc2;
+      padding:0;
     }
-    
     .used-body { flex:1; }
     .used-title { margin:0 0 6px; font-weight:800; font-size:18px; }
     .used-sub { margin:0; color:#555; font-size:14px; }
     .used-meta { margin-top:8px; font-size:13px; color:#666; }
-    
     .used-actions { margin-top:12px; display:flex; gap:10px; align-items:center; }
-    
-    /* Buttons + chips in matching green */
     .used-btn {
       display:inline-block; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:14px;
       border:1px solid #b7dfc2; background:#e8f5e9; color:#166534; font-weight:600;
     }
     .used-btn:hover { filter: brightness(0.98); }
-    
     .used-chip {
       display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px;
       font-size:12px; font-weight:700;
@@ -208,11 +189,11 @@
       margin-top:8px;
     }
     .step-card{
-      width:320px;                    /* fixed width */
+      width:320px;
       min-height:110px;
-      border:1px solid #d9d4fb;       /* light lavender border */
+      border:1px solid #d9d4fb;
       border-radius:12px;
-      background:#ede9fe;             /* lavender fill */
+      background:#ede9fe;
       padding:14px;
       display:flex;
       flex-direction:column;
@@ -226,10 +207,8 @@
     .step-card:active{ transform:translateY(1px); }
     .step-card h3{ margin:0 0 6px; font-size:18px; font-weight:800; }
     .step-card p { margin:0; font-size:14px; color:#374151; }
-    
-    /* step-card state variants + subtle link */
-    .step-card.active  { cursor: pointer; opacity: 1; }
-    .step-card.locked  { cursor: default; opacity: .98; }
+    .step-card.active   { cursor: pointer; opacity: 1; }
+    .step-card.locked   { cursor: default; opacity: .98; }
     .step-card.inactive{
       background:#f3f4f6; border-color:#e5e7eb; color:#6b7280;
       cursor: default; box-shadow:none;
@@ -238,14 +217,13 @@
       margin-top:6px; font-size:12px; text-decoration:underline;
       cursor:pointer; opacity:.85;
     }
-    /* Booked/confirmed look for Step 1 */
     .step-card.booked{
-      background:#e8f5e9;           /* soft green */
+      background:#e8f5e9;
       border-color:#b7dfc2;
     }
     .step-card.booked h3,
     .step-card.booked p{
-      color:#166534;                 /* deep green text */
+      color:#166534;
     }
     .step-card.booked:hover{ filter:brightness(0.98); }
 
@@ -256,26 +234,54 @@
     .inline-controls{ display:flex; gap:8px; align-items:center; margin:12px 0 4px; justify-content:center; }
     .inline-title{ font-weight:800; margin:12px 0 6px; }
 
-    /* Step 2 — Agenda look & feel (wider, minimalist rows) */
-    #step2 .agenda-wrap{ max-width:652px; }
-    #step2 .agenda-title{ font-weight:800; margin:12px 0 6px; }
-    #step2 .agenda-list{ display:grid; }
-    #step2 .agenda-input-row{ display:flex; gap:8px; margin-top:8px; max-width:652px; }
-    #step2 .agenda-input-row input[type="text"]{ flex:1; }
-    
-    /* Minimal rows (override the generic .sel-item box style) */
-    #step2 .agenda-wrap .sel-item{
-      background: transparent;
-      border: none;
-      padding: 6px 0;
-      border-bottom: 1px solid #eee;
-    }
-    #step2 .agenda-wrap .sel-item:last-child{ border-bottom: none; }
-    #step2 .agenda-wrap .agenda-text{ font-weight:600; }
-    #step2 .agenda-wrap .agenda-actions{ display:flex; gap:6px; flex-shrink:0; opacity:.7; }
-    #step2 .agenda-wrap .sel-item:hover .agenda-actions{ opacity:1; }
-    #step2 .agenda-wrap .sel-item input[type="text"]{ width:100%; min-width:0; }
+    /*
+    ████████╗███████╗██████╗ ██╗   ██╗██████╗  ██████╗ ███████╗
+    ╚══██╔══╝██╔════╝██╔══██╗██║   ██║██╔══██╗██╔═══██╗██╔════╝
+       ██║   █████╗  ██████╔╝██║   ██║██████╔╝██║   ██║███████╗
+       ██║   ██╔══╝  ██╔══██╗██║   ██║██╔═══╝ ██║   ██║╚════██║
+       ██║   ███████╗██║  ██║╚██████╔╝██║     ╚██████╔╝███████║
+       ╚═╝   ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝      ╚═════╝ ╚══════╝
+    */
 
+    /* === IMPROVED: Step 2 General Styles === */
+    #step2 .week-wrap {
+        background: #fcfcff; /* A very light lavender/blue */
+        border: 1px solid #e8e6f5;
+        padding: 24px;
+        box-shadow: 0 4px 12px rgba(0,0,0,.04);
+    }
+    #step2 .week-title {
+        font-size: 24px;
+        font-weight: 800;
+        color: #2d3748; /* A darker, less intense color */
+    }
+    #step2 .notice {
+        font-size: 15px;
+        color: #555;
+        max-width: 65ch; /* Improve readability length */
+    }
+
+    /* General input styling for Step 2 */
+    .s2-input,
+    #step2 textarea,
+    #step2 input[type="text"] {
+        width: 100%;
+        padding: 10px 14px;
+        border: 1px solid #cbd5e0;
+        border-radius: 8px;
+        font-size: 15px;
+        background: #fff;
+        box-sizing: border-box; /* Ensures padding is included in width */
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .s2-input:focus,
+    #step2 textarea:focus,
+    #step2 input[type="text"]:focus {
+        outline: none;
+        border-color: #4299e1;
+        box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.2);
+    }
+    
     .save-status{
       margin-left:auto;
       display:flex;
@@ -284,33 +290,128 @@
       font-size:12px;
       color:#6b7280; /* slate-500 */
     }
-    #s2SaveBtn { padding: 0 6px; }  /* keep it small */
+    #s2SaveBtn { padding: 0 6px; }
 
     /* Step 2: put the save UI right after the title text */
     #step2 .week-head{
-      justify-content: flex-start;   /* not space-between */
-      align-items: baseline;         /* baseline-align with the title */
-      gap: 10px;                     /* small gap between title and save UI */
-      flex-wrap: wrap;               /* wrap on small screens */
+      justify-content: flex-start;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
     }
     #step2 .save-status{
-      margin-left: 0;                /* remove the right-push */
+      margin-left: 0;
     }
 
-    /* Step 2 – Prep questions card */
+    /* === IMPROVED: Step 2 Prep Questions Card === */
     .prep-card{
-      border: 1px solid #e5e7eb;          /* hairline */
-      border-radius: 12px;                 /* rounded */
-      background: #f9fafb;                 /* very light */
-      padding: 14px 16px;
+      background: #ffffff; /* White background to stand out */
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-top: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.05);
     }
-    .prep-card .cq-title{ font-weight: 700; margin: 6px 0 8px; }
-    .prep-card .cq-row{ display:flex; align-items:center; gap:8px; margin:6px 0; }
+    .prep-card .cq-title{
+      font-weight: 700;
+      font-size: 16px;
+      color: #1a202c;
+      margin: 16px 0 10px;
+    }
+    .prep-card .cq-title:first-child {
+      margin-top: 0;
+    }
+    .prep-card .cq-row{
+      display:flex; align-items:center; gap:8px; margin:6px 0;
+      padding: 8px 12px;
+      border-radius: 8px;
+      transition: background-color 0.2s ease;
+    }
+    .prep-card .cq-row:hover {
+      background-color: #f7f9ff;
+    }
+    .prep-card .cq-row label {
+      font-size: 15px;
+      color: #4a5568;
+    }
+
     .prep-banner{font-weight:700}
     .prep-hint{margin-top:4px;color:#666;font-size:13px}
     
     /* nice spacing before the agenda */
     .prep-card + .agenda-wrap{ margin-top:16px; }
+
+    /* === IMPROVED: Step 2 Agenda === */
+    .agenda-wrap{
+      max-width: 652px;
+      margin-top: 24px;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 24px;
+    }
+    #step2 .agenda-title{
+      font-size: 18px;
+      font-weight: 700;
+      color: #2d3748;
+      margin-bottom: 12px;
+    }
+    #step2 .agenda-list{
+      display:grid;
+    }
+    #step2 .agenda-input-row{
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+      background: #fff;
+      padding: 6px;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+    }
+    #step2 .agenda-input-row input[type="text"]{
+      flex: 1;
+      border: none; /* Remove border from input inside the group */
+      background: transparent;
+      padding: 6px 8px;
+    }
+    #step2 .agenda-input-row input[type="text"]:focus {
+      box-shadow: none; /* Remove focus ring from input inside the group */
+    }
+    #step2 .agenda-input-row .btn {
+      background-color: #3182ce;
+      color: white;
+      font-weight: 600;
+      border: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,.1);
+    }
+    #step2 .agenda-input-row .btn:hover {
+      background-color: #2b6cb0;
+    }
+
+    /* Style each agenda item as a distinct "chip" or row */
+    #step2 .agenda-wrap .sel-item{
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      transition: box-shadow 0.2s;
+    }
+    #step2 .agenda-wrap .sel-item:hover {
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+    #step2 .agenda-wrap .agenda-text{ font-weight:600; }
+    
+    /* Make actions always visible for better discoverability */
+    #step2 .agenda-wrap .agenda-actions{
+      display:flex; gap:6px; flex-shrink:0;
+      opacity: 0.8;
+      transition: opacity 0.2s;
+    }
+    #step2 .agenda-wrap .sel-item:hover .agenda-actions{
+      opacity:1;
+    }
+    #step2 .agenda-wrap .sel-item input[type="text"]{ width:100%; min-width:0; }
 
   </style>
 </head>
