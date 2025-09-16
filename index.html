@@ -306,6 +306,8 @@
     }
     .prep-card .cq-title{ font-weight: 700; margin: 6px 0 8px; }
     .prep-card .cq-row{ display:flex; align-items:center; gap:8px; margin:6px 0; }
+    .prep-banner{font-weight:700}
+    .prep-hint{margin-top:4px;color:#666;font-size:13px}
     
     /* nice spacing before the agenda */
     .prep-card + .agenda-wrap{ margin-top:16px; }
@@ -1361,63 +1363,68 @@ function renderWeek(payload) {
     closeConfirmModal(true);
   };
 
-  function renderStep2FromSlot(slot) {
-    state.lastBooked = slot ? { start: slot.start, end: slot.end } : null;
-    state.lastPrep   = (slot && slot.prep) ? { start: slot.prep.start, end: slot.prep.end } : null;
-    state.stage = 'postBook';
-  
-    document.getElementById('overviewView')?.classList.add('hide');
-    document.getElementById('weekView')?.classList.add('hide');
-    document.getElementById('step2')?.classList.remove('hide');
-  
-    const s2Colleague = document.getElementById('s2Colleague');
-    const s2Sub       = document.getElementById('s2Sub');
-  
-    const colleagueName =
-      state?.meta?.colleagueFirstName ||
-      state?.meta?.colleagueEmail ||
-      'your Culture Amp contact';
-  
-    if (s2Colleague) s2Colleague.textContent = colleagueName;
-  
-    // subheading logic (replaces old s2Note)
-    const hasQs   = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length > 0;
-    const hasPrep = !!(slot && slot.prep && slot.prep.start && slot.prep.end);
-  
-    if (s2Sub){
-      s2Sub.style.display = 'none';
-      s2Sub.classList.remove('prep-card'); // reset before (re)applying
-    
-      if (hasQs && hasPrep){
+function renderStep2FromSlot(slot) {
+  state.lastBooked = slot ? { start: slot.start, end: slot.end } : null;
+  state.lastPrep   = (slot && slot.prep) ? { start: slot.prep.start, end: slot.prep.end } : null;
+  state.stage = 'postBook';
+
+  document.getElementById('overviewView')?.classList.add('hide');
+  document.getElementById('weekView')?.classList.add('hide');
+  document.getElementById('step2')?.classList.remove('hide');
+
+  const s2Colleague = document.getElementById('s2Colleague');
+  const s2Sub       = document.getElementById('s2Sub');
+
+  const colleagueName =
+    state?.meta?.colleagueFirstName ||
+    state?.meta?.colleagueEmail ||
+    'your Culture Amp contact';
+
+  if (s2Colleague) s2Colleague.textContent = colleagueName;
+
+  // Build the single prep card (bold line + optional inline hint)
+  const hasQs   = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length > 0;
+  const hasPrep = !!(slot && slot.prep && slot.prep.start && slot.prep.end);
+
+  if (s2Sub) {
+    s2Sub.classList.remove('prep-card');
+    s2Sub.style.display = 'none';
+
+    if (hasQs) {
+      // Top/bold line
+      let top;
+      if (hasPrep) {
         const ps = slot.prep.start;
         const startTime = fmtTimeLocal(ps, state.tz).replace(':','h');
-    
-        s2Sub.classList.add('prep-card');
-        s2Sub.innerHTML = `
-          <strong>
-            We've held a preparation slot for ${colleagueName} on ${fmtDateLocal(ps, state.tz)} at ${startTime}.
-            Answering the questions below will help them in their preparations.
-          </strong>
-        `;
-        s2Sub.style.display = '';
-      } else if (hasQs && !hasPrep){
-        s2Sub.classList.add('prep-card');
-        s2Sub.innerHTML = `
-          <strong>
-            Answering the questions below will help them in their preparation.
-          </strong>
-        `;
-        s2Sub.style.display = '';
+        top = `We've held a preparation slot for ${colleagueName} on ${fmtDateLocal(ps, state.tz)} at ${startTime}. ` +
+              `Answering the questions below will help them in their preparation.`;
+      } else {
+        top = `Answering the questions below will help them in their preparation.`;
       }
+
+      // Inline required hint (in brackets), if any
+      const missing = missingRequiredCount ? missingRequiredCount() : 0;
+      const hint = (missing > 0)
+        ? `(${missing === 1 ? '1 required question is unanswered.' : `${missing} required questions are unanswered.`})`
+        : '';
+
+      s2Sub.classList.add('prep-card');
+      s2Sub.innerHTML = `
+        <div class="prep-banner"><strong>${top}</strong></div>
+        ${hint ? `<div class="prep-hint">${hint}</div>` : ''}
+      `;
+      s2Sub.style.display = '';
     }
-  
-    renderStep2Questions(slot);
-    renderAgenda(slot);
-  
-    const saveBtn = document.getElementById('s2SaveBtn');
-    if (saveBtn) saveBtn.onclick = () => saveSnapshot();
-    updateSaveUI();
   }
+
+  renderStep2Questions(slot);
+  renderAgenda(slot);
+
+  const saveBtn = document.getElementById('s2SaveBtn');
+  if (saveBtn) saveBtn.onclick = () => saveSnapshot();
+  updateSaveUI(); // keep this; if you later want live hint updates, you can refresh .prep-hint here.
+}
+
 
 function renderStep2Questions(slot) {
   const container = document.getElementById('s2Questions');
@@ -2640,13 +2647,7 @@ function updateSaveUI(){
   }
 
   // Keep your required-questions count (purely informational now)
-  if (hint){
-    const m = missingRequiredCount();
-    hint.style.display = m > 0 ? '' : 'none';
-    hint.textContent = m === 1
-      ? '1 required question is unanswered.'
-      : `${m} required questions are unanswered.`;
-  }
+  updatePrepBannerHintOnly();
 }
 
 
@@ -2659,6 +2660,59 @@ function fmtLastSaved(iso, tz){
   return `Last saved on ${date} at ${time}`;
 }
 
+function buildRequiredHintText(){
+  const m = missingRequiredCount();
+  if (m <= 0) return '';
+  return `(${m === 1 ? '1 required question is unanswered.' : `${m} required questions are unanswered.`})`;
+}
+
+function renderPrepBanner(slot){
+  const s2Sub = document.getElementById('s2Sub');
+  if (!s2Sub) return;
+
+  const hasQs   = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length > 0;
+  const hasPrep = !!(slot && slot.prep && slot.prep.start && slot.prep.end);
+  const colleagueName =
+    state?.meta?.colleagueFirstName ||
+    state?.meta?.colleagueEmail ||
+    'your People Scientist';
+
+  s2Sub.classList.add('prep-card');
+  s2Sub.style.display = hasQs ? '' : 'none';
+
+  // Top line
+  let top;
+  if (hasPrep){
+    const ps = slot.prep.start;
+    const startTime = fmtTimeLocal(ps, state.tz).replace(':','h');
+    top = `We've held a preparation slot for ${colleagueName} on ${fmtDateLocal(ps, state.tz)} at ${startTime}. ` +
+          `Answering the questions below will help them in their preparation.`;
+  } else {
+    top = `Answering the questions below will help them in their preparation.`;
+  }
+
+  const hint = buildRequiredHintText();
+  s2Sub.innerHTML = `
+    <div class="prep-banner"><strong>${top}</strong></div>
+    ${hint ? `<div class="prep-hint">${hint}</div>` : ''}
+  `;
+}
+
+function updatePrepBannerHintOnly(){
+  const s2Sub = document.getElementById('s2Sub');
+  if (!s2Sub || s2Sub.style.display === 'none') return;
+  const hint = buildRequiredHintText();
+  let hintEl = s2Sub.querySelector('.prep-hint');
+  if (hint && !hintEl){
+    hintEl = document.createElement('div');
+    hintEl.className = 'prep-hint';
+    hintEl.textContent = hint;
+    s2Sub.appendChild(hintEl);
+  } else if (hintEl){
+    if (hint) { hintEl.textContent = hint; hintEl.style.display=''; }
+    else { hintEl.remove(); }
+  }
+}
 
   // Kick things off:
   init();
