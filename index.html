@@ -312,6 +312,22 @@
     /* nice spacing before the agenda */
     .prep-card + .agenda-wrap{ margin-top:16px; }
 
+    /* widen the prep card a bit */
+    #step2 .prep-card { max-width: 720px; }
+    
+    /* make all Step 2 inputs stretch */
+    #step2 .s2-input {
+      width: 100%;
+      box-sizing: border-box;
+    }
+    
+    /* textarea: keep short by default but allow the user to expand vertically */
+    #step2 textarea.s2-input {
+      min-height: 66px;   /* ~3 rows */
+      resize: vertical;   /* let users drag taller if they want */
+    }
+
+
   </style>
 </head>
 <body>
@@ -1468,7 +1484,7 @@ function renderStep2Questions(slot) {
       let input;
       if (multiline) {
         input = document.createElement('textarea');
-        input.rows = 4;
+        input.rows = 2;
       } else {
         input = document.createElement('input');
         input.type = 'text';
