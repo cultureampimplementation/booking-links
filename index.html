@@ -286,6 +286,17 @@
     }
     #s2SaveBtn { padding: 0 6px; }  /* keep it small */
 
+    /* Step 2: put the save UI right after the title text */
+    #step2 .week-head{
+      justify-content: flex-start;   /* not space-between */
+      align-items: baseline;         /* baseline-align with the title */
+      gap: 10px;                     /* small gap between title and save UI */
+      flex-wrap: wrap;               /* wrap on small screens */
+    }
+    #step2 .save-status{
+      margin-left: 0;                /* remove the right-push */
+    }
+
   </style>
 </head>
 <body>
