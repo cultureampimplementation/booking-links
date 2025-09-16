@@ -1403,10 +1403,7 @@ function renderStep2FromSlot(slot) {
 
 function renderStep2Questions(slot) {
   const mount = document.getElementById('s2QMount') || document.getElementById('s2Questions');
-  mount.innerHTML = '';  // clear within the single card
-
-  const prep = slot?.prep || null;
-  const ctx = { /* ...as you have it... */ };
+  mount.innerHTML = '';
 
   const qs = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length
     ? state.confirmQuestions
@@ -1416,55 +1413,127 @@ function renderStep2Questions(slot) {
 
   ensureStateShape();
 
-  // no extra .prep-card wrapper here – just blocks
+  const ctx = {}; // keep your interp() context if you want
+
   qs.forEach((cq, idx) => {
-    const key = String(cq?.key || (`q${idx}`));
+    const key   = String(cq?.key || (`q${idx}`));
+    const type  = (cq?.type || 'single').toLowerCase(); // single | multi | text
+    const label = interp(cq?.label || 'Question', ctx) + (cq?.required ? ' *' : '');
+
     const block = document.createElement('div');
     block.style.margin = '12px 0';
 
     const title = document.createElement('div');
     title.className = 'cq-title';
-    title.textContent = interp(cq?.label || 'Question', ctx) + (cq?.required ? ' *' : '');
+    title.textContent = label;
     block.appendChild(title);
 
-    const opts = parseOptionsLoose(cq?.options).map(cleanLabel);
-    const saved = state.stateJSON.prep?.answers?.[key] ?? (cq?.saved != null ? cleanLabel(cq.saved) : null);
+    if (type === 'text') {
+      // TEXT
+      const saved = (getAnswer(key) ?? cq?.saved ?? '');
+      const multiline = !!cq?.multiline;
+      const maxLength = Number(cq?.maxLength || 0) || undefined;
 
-    opts.forEach(optRaw => {
-      const rendered = interp(cleanLabel(optRaw), ctx);
-      const id = `s2_${key}_${rendered.replace(/\W+/g,'_')}`;
+      let input;
+      if (multiline) {
+        input = document.createElement('textarea');
+        input.rows = 4;
+      } else {
+        input = document.createElement('input');
+        input.type = 'text';
+      }
+      input.className = 's2-input';
+      input.placeholder = cq?.placeholder || '';
+      if (maxLength) input.maxLength = maxLength;
+      input.value = String(saved || '');
 
-      const row = document.createElement('div');
-      row.className = 'cq-row';
+      input.addEventListener('input', debounce(() => {
+        setAnswer(key, String(input.value || '').trim());
+      }, 200));
 
-      const rb = document.createElement('input');
-      rb.type = 'radio';
-      rb.name = `s2_${key}`;
-      rb.id = id;
-      rb.value = rendered;
-      if (saved && String(saved) === rendered) rb.checked = true;
+      block.appendChild(input);
 
-      rb.addEventListener('change', () => {
-        ensureStateShape();
-        state.stateJSON.prep.answers[key] = rendered;
-        state.stateJSON.lastEditedAtISO = new Date().toISOString();
-        prepDirty = true;
-        markDirty();
+    } else if (type === 'multi') {
+      // MULTI (checkboxes)
+      const opts = parseOptionsLoose(cq?.options).map(cleanLabel);
+      let saved = getAnswer(key);
+      if (!Array.isArray(saved)) saved = saved == null ? [] : toArray(saved);
+      const savedSet = new Set(saved.map(String));
+
+      const maxSel = Number(cq?.maxSelections || 0) || Infinity;
+
+      opts.forEach(optRaw => {
+        const rendered = interp(cleanLabel(optRaw), ctx);
+        const id = `s2_${key}_${rendered.replace(/\W+/g,'_')}`;
+
+        const row = document.createElement('div');
+        row.className = 'cq-row';
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.id = id;
+        cb.checked = savedSet.has(rendered);
+
+        cb.addEventListener('change', () => {
+          // enforce maxSelections
+          const current = new Set(getAnswer(key) || []);
+          if (cb.checked) {
+            if (current.size >= maxSel) {
+              cb.checked = false;
+              alert(`You can select up to ${maxSel}.`);
+              return;
+            }
+            current.add(rendered);
+          } else {
+            current.delete(rendered);
+          }
+          setAnswer(key, Array.from(current));
+        });
+
+        const lab = document.createElement('label');
+        lab.setAttribute('for', id);
+        lab.textContent = rendered;
+
+        row.append(cb, lab);
+        block.appendChild(row);
       });
 
-      const lab = document.createElement('label');
-      lab.setAttribute('for', id);
-      lab.textContent = rendered;
+    } else {
+      // SINGLE (radio) – your existing behavior
+      const opts = parseOptionsLoose(cq?.options).map(cleanLabel);
+      const saved = getAnswer(key) ?? (cq?.saved != null ? cleanLabel(cq.saved) : null);
 
-      row.append(rb, lab);
-      block.appendChild(row);
-    });
+      opts.forEach(optRaw => {
+        const rendered = interp(cleanLabel(optRaw), ctx);
+        const id = `s2_${key}_${rendered.replace(/\W+/g,'_')}`;
+
+        const row = document.createElement('div');
+        row.className = 'cq-row';
+
+        const rb = document.createElement('input');
+        rb.type = 'radio';
+        rb.name = `s2_${key}`;
+        rb.id   = id;
+        rb.value = rendered;
+        if (saved && String(saved) === rendered) rb.checked = true;
+
+        rb.addEventListener('change', () => setAnswer(key, rendered));
+
+        const lab = document.createElement('label');
+        lab.setAttribute('for', id);
+        lab.textContent = rendered;
+
+        row.append(rb, lab);
+        block.appendChild(row);
+      });
+    }
 
     mount.appendChild(block);
   });
 
   updateSaveUI();
 }
+
 
 function renderAgenda(){
   ensureStateShape();
@@ -2589,15 +2658,21 @@ function missingRequiredCount(){
     ? state.confirmQuestions
     : (state.confirmQuestion ? [state.confirmQuestion] : []);
   if (!qs.length) return 0;
+
   const answers = state.stateJSON?.prep?.answers || {};
   let missing = 0;
+
   qs.forEach((q, idx) => {
     if (!q?.required) return;
     const key = String(q.key || ('q' + idx));
-    if (!answers[key]) missing++;
+    const val = answers[key];
+
+    // Treat empty arrays or blank strings as missing
+    if (isBlank(val)) missing++;
   });
   return missing;
 }
+
 
 function updateSaveUI(){
   const btn  = document.getElementById('s2SaveBtn');
@@ -2684,6 +2759,29 @@ function updatePrepBannerHintOnly(){
     else { hintEl.remove(); }
   }
 }
+
+function getAnswer(key) {
+  return state?.stateJSON?.prep?.answers?.[key];
+}
+function setAnswer(key, val) {
+  ensureStateShape();
+  state.stateJSON.prep.answers[key] = val;
+  state.stateJSON.lastEditedAtISO = new Date().toISOString();
+  prepDirty = true;
+  markDirty();
+}
+function toArray(v) {
+  if (Array.isArray(v)) return v;
+  if (v == null) return [];
+  return [String(v)];
+}
+function isBlank(val) {
+  if (val == null) return true;
+  if (Array.isArray(val)) return val.length === 0;
+  if (typeof val === 'string') return val.trim() === '';
+  return false;
+}
+
 
   // Kick things off:
   init();
