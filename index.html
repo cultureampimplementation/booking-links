@@ -759,7 +759,7 @@ function generateWeeksForCurrentQuarter({
   function showOnly(view) {
     const onLanding = view === 'landing';
     document.querySelector('h1')?.classList.toggle('hide', onLanding); // <-- Add this line
-    document.querySelector('.controls')?.classList.toggle('hide', onLanding);
+    document.querySelector('.controls')?.classList.remove('hide'); // show on all views
     document.getElementById('notice')?.classList.toggle('hide', onLanding);
     document.getElementById('crumb')?.classList.toggle('hide', onLanding);
     
