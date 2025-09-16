@@ -276,6 +276,16 @@
     #step2 .agenda-wrap .sel-item:hover .agenda-actions{ opacity:1; }
     #step2 .agenda-wrap .sel-item input[type="text"]{ width:100%; min-width:0; }
 
+    .save-status{
+      margin-left:auto;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-size:12px;
+      color:#6b7280; /* slate-500 */
+    }
+    #s2SaveBtn { padding: 0 6px; }  /* keep it small */
+
   </style>
 </head>
 <body>
@@ -358,25 +368,32 @@
     </div>
   </div>
 
-  <!-- STEP 2 PANEL -->
-  <div id="step2" class="hide">
-    <div class="week-wrap">
-      <div class="week-head">
-        <div class="week-title">Step 2: Help <span id="s2Colleague"></span> prepare</div>
+<!-- STEP 2 PANEL -->
+<div id="step2" class="hide">
+  <div class="week-wrap">
+    <div class="week-head">
+      <div class="week-title">
+        Step 2: Help <span id="s2Colleague"></span> prepare
       </div>
-      <!-- subheading (shown conditionally; replaces old s2Note) -->
-      <div class="notice" id="s2Sub" style="display:none;margin-top:6px;"></div>
-  
-      <div id="s2Questions" class="notice" style="margin-top:12px;"></div>
-      <footer style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
-        <span id="s2ReqHint" class="notice" style="margin-right:auto;display:none;">
-          <!-- filled by JS -->
-        </span>
-        <button class="btn" id="s2DoneBtn" disabled>Save</button>
-      </footer>
 
+      <!-- compact save status / action (right side) -->
+      <div class="save-status" id="s2SaveUI">
+        <span id="s2LastSaved">Not saved yet</span>
+        <button class="link-btn" id="s2SaveBtn" style="display:none;">
+          Save recent changes 💾
+        </button>
+      </div>
     </div>
+
+    <!-- subheading + required hint sit under the header -->
+    <div class="notice" id="s2Sub" style="display:none;margin-top:6px;"></div>
+    <div id="s2ReqHint" class="notice" style="display:none;margin-top:6px;"></div>
+
+    <!-- questions/agenda mount point -->
+    <div id="s2Questions" class="notice" style="margin-top:12px;"></div>
   </div>
+</div>
+
 
 
   <!-- CONFIRM MODAL (single-select flow) -->
@@ -1347,22 +1364,13 @@ function renderWeek(payload) {
     renderStep2Questions(slot);
     renderAgenda(slot);
   
-    const doneBtn = document.getElementById('s2DoneBtn');
-    doneBtn.textContent = 'Save';
-    doneBtn.onclick = () => {
-      // only save if there is something to save; otherwise just show “Saved”
-      if (agendaDirty || prepDirty){
-        saveSnapshot();
-      } else {
-        markClean();
-      }
-    };
-    updateSaveButton(); 
+    const saveBtn = document.getElementById('s2SaveBtn');
+    if (saveBtn) saveBtn.onclick = () => saveSnapshot();
+    updateSaveUI();
   }
 
 function renderStep2Questions(slot) {
   const container = document.getElementById('s2Questions');
-  const doneBtn   = document.getElementById('s2DoneBtn');
   container.innerHTML = '';
 
   const prep = slot?.prep || null;
@@ -1390,7 +1398,7 @@ function renderStep2Questions(slot) {
 
   // no questions → leave container empty (agenda will render), but keep Save active if dirty
   if (!qs.length) {
-    updateSaveButton();
+    updateSaveUI();
     return;
   }
 
@@ -1428,7 +1436,7 @@ function renderStep2Questions(slot) {
         state.stateJSON.prep.answers[key] = rendered;
         state.stateJSON.lastEditedAtISO = new Date().toISOString();
         prepDirty = true;
-        markDirty();          // this will call updateSaveButton()
+        markDirty();          // this will call updateSaveUI()
       });
 
       const lab = document.createElement('label');
@@ -1443,7 +1451,7 @@ function renderStep2Questions(slot) {
   });
 
   // never disable Save here — it’s controlled by dirty state
-  updateSaveButton();
+  updateSaveUI();
 }
 
 function renderAgenda(){
@@ -1642,33 +1650,6 @@ function renderAgenda(){
   });
 
   paint();
-}
-
-
-function validateStep2Complete() {
-  const doneBtn = document.getElementById('s2DoneBtn');
-
-  // Source of truth: the question list
-  const qs = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length
-    ? state.confirmQuestions
-    : (state.confirmQuestion ? [state.confirmQuestion] : []);
-
-  // If there are no questions, you're done
-  if (!qs.length) {
-    doneBtn.disabled = false;
-    return;
-  }
-
-  // Answers live in state.stateJSON.prep.answers
-  const answers = state.stateJSON?.prep?.answers || {};
-
-  const ok = qs.every((q, idx) => {
-    if (!q?.required) return true;
-    const key = String(q.key || ('q' + idx));
-    return !!answers[key];
-  });
-
-  doneBtn.disabled = !ok;
 }
 
   async function fetchWeekAtGranularity(mondayKey, g) {
@@ -2542,20 +2523,20 @@ function ensureStateShape(){
 
 async function saveSnapshot(){
   ensureStateShape();
-  const btn = document.getElementById('s2DoneBtn');
-  if (btn){
-    btn.textContent = 'Saving…';
-    btn.disabled = true;  // temporary while saving, regardless of required/dirty
-  }
+  const btn = document.getElementById('s2SaveBtn');
+  if (btn){ btn.textContent = 'Saving…'; btn.disabled = true; }
+
   try{
     state.stateJSON.lastEditedAtISO = new Date().toISOString();
     await apiPost('saveStateJSON', { token }, { stateJSON: state.stateJSON });
-    markClean();
+    markClean();                         // will hide the button + update timestamp
   } catch(e){
     console.warn('saveStateJSON failed', e);
-    if (btn){ btn.textContent = 'Save (retry)'; btn.disabled = false; }
+    if (btn){ btn.textContent = 'Save recent changes 💾'; btn.disabled = false; }
     alert('Could not save right now. Your changes are still visible locally.');
-    updateSaveButton();
+    updateSaveUI();
+  } finally {
+    if (btn){ btn.textContent = 'Save recent changes 💾'; btn.disabled = false; }
   }
 }
 
@@ -2567,21 +2548,13 @@ let agendaDirty = false;
 let prepDirty   = false;
 
 function markDirty(){
-  const btn = document.getElementById('s2DoneBtn');
-  if (btn) btn.textContent = 'Save';
-  updateSaveButton();
+  updateSaveUI();
 }
 
 function markClean(){
   agendaDirty = false;
   prepDirty   = false;
-  const btn = document.getElementById('s2DoneBtn');
-  if (btn){
-    btn.textContent = 'Saved ✓';
-    // revert label after a moment
-    setTimeout(() => { btn.textContent = 'Save'; updateSaveButton(); }, 900);
-  }
-  updateSaveButton();
+  updateSaveUI();   // hides the Save button + updates "Last saved..."
 }
 
 function missingRequiredCount(){
@@ -2599,13 +2572,24 @@ function missingRequiredCount(){
   return missing;
 }
 
-function updateSaveButton(){
-  const btn  = document.getElementById('s2DoneBtn');
+function updateSaveUI(){
+  const btn  = document.getElementById('s2SaveBtn');
+  const last = document.getElementById('s2LastSaved');
   const hint = document.getElementById('s2ReqHint');
-  if (btn) {
-    // Save is enabled whenever there are unsaved changes
-    btn.disabled = !(agendaDirty || prepDirty);
+
+  const isDirty = (agendaDirty || prepDirty);
+
+  // Button only shows when there are unsaved edits
+  if (btn) btn.style.display = isDirty ? '' : 'none';
+
+  // Status text: either "Unsaved changes" or the last saved timestamp
+  if (last) {
+    last.textContent = isDirty
+      ? 'Unsaved changes'
+      : fmtLastSaved(state.stateJSON?.lastEditedAtISO, state.tz);
   }
+
+  // Keep your required-questions count (purely informational now)
   if (hint){
     const m = missingRequiredCount();
     hint.style.display = m > 0 ? '' : 'none';
@@ -2613,6 +2597,16 @@ function updateSaveButton(){
       ? '1 required question is unanswered.'
       : `${m} required questions are unanswered.`;
   }
+}
+
+
+function fmtLastSaved(iso, tz){
+  if (!iso) return 'Not saved yet';
+  const d = new Date(iso);
+  if (isNaN(+d)) return 'Not saved yet';
+  const date = new Intl.DateTimeFormat('en-US', { timeZone: tz, month:'short', day:'2-digit', year:'numeric' }).format(d);
+  const time = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour:'2-digit', minute:'2-digit', hour12:false }).format(d);
+  return `Last saved on ${date} at ${time}`;
 }
 
 
