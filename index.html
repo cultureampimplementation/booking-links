@@ -2264,6 +2264,18 @@ function showInlineOverview(){
   state._quarters = buildQuarterListFull({ futureQuarters, pastQuarters: 0 });
   state._qStartIndex = findCurrentQuarterIndex(state._quarters);
   state._qRenderedEnd = state._qStartIndex;   // start with current quarter only
+  const MIN_WEEKS = 6;
+  const opts = {
+    initialTz: state.meta?.initialTz || state.tz || 'UTC'
+  };
+  // Make sure the current quarter is materialized (init only added current quarter)
+  materializeQuarter(state._quarters[state._qStartIndex].key, opts);
+
+  let guard = 0;
+  while (countSelectableWeeksInState() < MIN_WEEKS && state._qRenderedEnd < state._quarters.length - 1 && guard++ < 8) {
+    state._qRenderedEnd += 1;
+    materializeQuarter(state._quarters[state._qRenderedEnd].key, opts);
+  }
 
   renderInlineQuarterList();                   // "See more" will now append the next quarter(s)
 }
@@ -2974,6 +2986,34 @@ function detectCalendarAccess(meta) {
 
   return false; // unknown -> blocked
 }
+
+function countSelectableWeeksInState() {
+  let n = 0;
+  for (const weeks of state.monthWeeks.values()) {
+    for (const w of weeks) if (w.selectable) n++;
+  }
+  return n;
+}
+
+function materializeQuarter(qKey, opts) {
+  const { y, q } = parseQKey(qKey);
+  const weeks = generateWeeksForQuarter({
+    year: y, quarter: q,
+    initialTz: opts.initialTz || state.meta?.initialTz || state.tz || 'UTC',
+    minNoticeDays: Number(state.meta?.options?.minNoticeDays ?? 0),
+    weekdaysCSV:   String(state.meta?.options?.weekdaysCSV || 'Mon,Tue,Wed,Thu,Fri'),
+    blackoutDatesCSV: String(state.meta?.options?.blackoutDatesCSV || '')
+  });
+  const mw = buildMonthWeeksFromWeekList(weeks);
+  for (const [ym, arr] of mw.entries()) {
+    if (!state.monthWeeks.has(ym)) state.monthWeeks.set(ym, []);
+    const existing = state.monthWeeks.get(ym);
+    const seen = new Set(existing.map(w => w.startISO));
+    arr.forEach(w => { if (!seen.has(w.startISO)) existing.push(w); });
+    existing.sort((a,b)=>a.startISO.localeCompare(b.startISO));
+  }
+}
+
 
   // Kick things off:
   init();
