@@ -1,447 +1,404 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <base target="_top">
-  <meta charset="utf-8">
-  <title>Pick meeting times</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Book your session</title>
   <style>
-    /* Hide app visuals and prevent scroll during boot */
-    html.booting, body.booting { overflow: hidden; }
-    .booting #app { visibility: hidden; }
-    /* Ensure loader covers everything */
-    #loadingModal { position: fixed; inset: 0; z-index: 9999; }
-  </style>
-  <script>document.documentElement.classList.add('booting');</script>
-  <style>
-    :root { color-scheme: light dark; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 20px; }
-    h1 { margin: 0 0 12px; }
+    :root{
+      color-scheme: light dark;
 
-    /* top controls */
-    .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; position: sticky; top: 0; background: var(--bg, #fff); padding-bottom: 8px; z-index: 2; }
-    select { padding: 8px; font-size: 14px; }
-    .tabs { display: inline-flex; gap: 6px; border: 1px solid #e0e0e0; border-radius: 999px; padding: 2px; }
-    .tab { padding: 6px 10px; border-radius: 999px; cursor: pointer; }
-    .tab.active { background: #f0f4ff; font-weight: 600; }
-    .nav-btn[disabled] { opacity:.5; cursor:default; }
+      /* timeline geometry */
+      --dot-size: 18px;
+      --dot-col: 28px;        /* width of the dot column */
+      --left-gutter: 62px;    /* padding-left on .timeline */
+      --rail-w: 4px;
+      --dot-ring: var(--rail-w);
 
-    .cart { margin-left: auto; display: flex; gap: 8px; align-items: center; }
-    .badge { padding: 4px 8px; border: 1px solid #ddd; border-radius: 999px; font-size: 12px; cursor: pointer; }
-    .btn { padding: 8px 12px; border: 1px solid #ccc; border-radius: 8px; background: #f7f7f7; cursor: pointer; }
-    .btn:disabled { opacity: .5; cursor: default; }
-    .success { background: #d8f5d1; border-color: #b4e3a8; }
-    .error { background: #ffe2e2; border-color: #ffc7c7; }
+      /* vertical rhythm (used to cap the rail) */
+      --tl-pad-y: 12px;       /* .timeline vertical padding */
+      --step-pad-y: 12px;     /* .t-step vertical padding   */
+      --dot-outer: calc(var(--dot-size) + 2 * var(--dot-ring));
 
-    .notice { margin-top: 4px; color: #666; font-size: 13px; }
-    .breadcrumb { margin-top: 6px; color: #666; font-size: 14px; }
-    .breadcrumb a { color: inherit; text-decoration: underline; cursor: pointer; }
+      /* colors */
+      --purple: #7c3aed;
+      --rail: #6b7280;
+      --gray-400: #9ca3af;
 
-    /* ===== Overview (Months with Week rows) ===== */
-    
+      /* month pills */
+      --pill-w: 300px;        /* width of each week pill (adjust as needed) */
+      --week-pill-gap: 12px;  /* vertical space between pills */
+      --agenda-width: 550px;
+    }
+
+    html, body { margin:0; padding:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    body { padding: 20px; }
+
+    /* Header */
+    .h-wrap { margin-bottom: 10px; }
+    .h-eyebrow { font-size: 13px; color: #6b7280; }
+    .h-title { font-weight: 900; font-size: clamp(20px, 3.3vw, 36px); line-height: 1.15; margin-top: 4px; }
+
+    /* Notice */
+    .notice { margin-top:10px; color:#4b5563; font-size:14px; }
+
+    /* Timeline (single row items; rail behind dots) */
+    .timeline{
+      position: relative;
+      padding: var(--tl-pad-y) 14px var(--tl-pad-y) var(--left-gutter);
+      margin-top: 16px;
+    }
+    .timeline::before{
+      content: "";
+      position: absolute;
+
+      /* Rail starts/ends at the centers of the first/last dots */
+      top:    calc(var(--tl-pad-y) + var(--step-pad-y) + (var(--dot-outer) / 2));
+      bottom: calc(var(--tl-pad-y) + var(--step-pad-y) + (var(--dot-outer) / 2));
+
+      /* Rail is exactly through the center of the dot column */
+      left: calc(var(--left-gutter) + (var(--dot-col) / 2) - (var(--rail-w) / 2));
+      width: var(--rail-w);
+      background: var(--rail);
+      border-radius: 4px;
+      z-index: 0; /* behind the dots */
+    }
+
+    #timeline{ display: grid; gap: 0; }
+
+    .t-step{
+      display: grid;
+      grid-template-columns: var(--dot-col) 1fr;
+      align-items: center;       /* center dot & title in the row */
+      gap: 14px;
+      padding: var(--step-pad-y) 0;
+    }
+
+    .t-dot{
+      justify-self: center;
+      align-self: center;        /* center the dot vertically */
+      width: var(--dot-size);
+      height: var(--dot-size);
+      border-radius: 999px;
+      border: var(--dot-ring) solid var(--rail);
+      background: #fff;
+      position: relative;
+      z-index: 1;                 /* above the rail */
+    }
+
+    /* states */
+    .t-dot.active{
+      background: var(--purple);
+      border-color: var(--rail);
+    }
+
+    /* solid purple + white check for "done" */
+    .t-dot.done{
+      background: var(--purple);
+      border-color: var(--rail);
+    }
+    .t-dot.done::after{
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: calc(var(--dot-size) * .55);
+      height: calc(var(--dot-size) * .33);
+      border-left: 3px solid #fff;
+      border-bottom: 3px solid #fff;
+      transform: translate(-50%, -55%) rotate(-45deg);
+      border-radius: 1px;
+    }
+
+    /* body = title | ctas on one row; inline content spans full width below */
+    .t-body{
+      display: grid;
+      grid-template-columns: auto auto 1fr; /* title | CTA | spacer */
+      align-items: baseline;                /* align with first line of title */
+      column-gap: 10px;
+      padding: 6px 0;
+    }
+    .t-title{
+      font-weight: 800;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+    .t-cta{
+      justify-self: start;
+      display: inline-flex;
+      gap: 8px;
+      flex-wrap: nowrap;
+    }
+
+    /* hide subtitles, keep single-row look */
+    .t-sub{ display:none !important; }
+
+    /* anything inline under a step (agenda, etc) spans the full row below */
+    .t-body .agenda-wrap,
+    .t-body #s3Mount{
+      grid-column: 1 / -1;
+      margin-top: 10px;
+    }
+
+    .btn { padding:8px 12px; border:1px solid #c7d2fe; background:#7c3aed; color:#fff; border-radius:8px; cursor:pointer; font-weight:600; }
+    .btn.secondary { background:#fff; color:#7c3aed; }
+    .btn:disabled { opacity:.6; cursor:default; }
+    .link { background:none; border:none; padding:0; color:#7c3aed; text-decoration:underline; cursor:pointer; }
+    .muted { color:#9ca3af; }
+
+    /* Cards */
+    .card { border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:14px; }
+
+    /* Inline overview/week */
+    #landingInline { margin-top: 0; }
+
     .ov-grid{
       display: grid;
-      grid-template-columns: repeat(auto-fill, 320px);
+      grid-template-columns: repeat(auto-fit, minmax(calc(var(--pill-w) + 24px), max-content));
       gap: 14px;
-      justify-content: start;
-      margin-top: 12px;
     }
 
     .mcard{
-      border: 1px solid #e0e0e0;
-      border-radius: 12px;
-      padding: 12px;
-      background: #fff;
-      width: 100%;            /* was 320px */
-      box-sizing: border-box; /* include borders/padding in width */
-      /* optional safety: */
-      min-width: 0;
-      overflow: hidden;
+      border:1px solid #e5e7eb;
+      border-radius:12px;
+      background:#fff;
+      padding:12px;
+      width: fit-content;
+      min-width: calc(var(--pill-w) + 24px); /* 12px x-padding on both sides */
     }
-    .mcard:hover { box-shadow: 0 2px 10px rgba(0,0,0,.06); }
-    .mhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
-    .mname { font-weight: 800; font-size: 18px; }
-    .weeks { display: grid; gap: 10px; }
-    .week-row:hover { box-shadow: 0 1px 6px rgba(0,0,0,.08); }
-    .week-label { font-size: 13px; font-weight: 600; color: #333; }
 
-    /* Clickable week pill */
+    .mhead{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:8px; }
+    .mname{ font-weight:900; font-size:18px; }
+
+    /* container that holds the week pills (the div right after .mhead) */
+    .mcard .mhead + div{
+      display:grid;
+      gap: var(--week-pill-gap);
+    }
+
+    /* the lilac week pill – single rule for look + width */
     .week-pill{
-      /* slightly darker default */
-      background:#ede9fe;           /* lavender */
-      color:#0f172a;
-      border:1px solid rgba(15,23,42,.10);
+      /* look */
+      background:#ede9fe;
+      color:#111827;
+      border:1px solid rgba(17,24,39,.1);
       border-radius:10px;
       padding:10px 12px;
-      font-weight:800; font-size:14px; line-height:1.1;
-      cursor:pointer; user-select:none; text-align:left;
+      font-weight:800;
+      font-size:14px;
+      text-align:left;
       box-shadow:inset 0 -1px 0 rgba(255,255,255,.6);
-    }
-    .week-pill:hover    { filter: brightness(1.02); }
-    .week-pill:active   { transform: translateY(1px); }
-
-    /* Force contrasting text when bg is dark */
-    .week-pill.lightText{ color:#fff; }
-
-    /* Zero availability: white with a hairline outline */
-    .week-pill.zero{
-      background:#fff; color:#0f172a;
-      border-color:#e5e7eb; box-shadow:none; cursor:default;
-    }
-    .week-pill.zero:hover { filter: none; }
-
-    .week-pill.disabled {
-      background: #eef2f7;
-      color: #6b7280;
-      cursor: default;
-      box-shadow: none;
-    }
-
-    /* ===== Week view ===== */
-    .week-wrap { border: 1px solid #e0e0e0; border-radius: 12px; padding: 14px; margin-top: 12px; background: #fff; }
-    .week-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-    .week-title { font-weight: 900; font-size: 22px; }
-    .nav-btn { padding: 6px 10px; border: 1px solid #ddd; border-radius: 8px; background: #fff; cursor: pointer; }
-
-    .grid { border: 1px solid #eee; border-radius: 12px; overflow: hidden; margin-top: 10px; }
-    .grid-header { display: grid; grid-template-columns: repeat(7, 1fr); }
-    .grid-header div { text-align: center; font-size: 12px; padding: 6px 0; background: #fafafa; border-bottom: 1px solid #eee; font-weight: 700; }
-
-    .days { display: grid; grid-template-columns: repeat(7, 1fr); }
-    .day { border-right: 1px solid #f2f2f2; border-bottom: 1px solid #f2f2f2; position: relative; padding: 6px; min-height: 120px; }
-    .day:nth-child(7n) { border-right: none; }
-    .day-header { display:flex; justify-content: space-between; align-items:center; margin-bottom: 8px; }
-    .day.today .date { color:#0b5bd3; }
-    .date { font-size: 12px; font-weight: 700; color: #333; }
-    .past .date { color: #a0a0a0; }
-
-    .heat { position:absolute; inset:0; z-index:0; border-radius:0; }
-
-    .day-body { display: grid; grid-template-columns: 1fr; gap: 8px; position: relative; z-index: 1; }
-    .pill { border: 1px solid #c7d6e6; background:#f7fbff; border-radius: 10px; padding: 8px 10px; min-height: 30px; display:flex; align-items:center; gap:8px; font-weight:600; font-size: 13px; justify-content: center; }
-    .pill .icon { width: 1.1em; text-align:center; opacity:.55; }
-    .pill .label { font-variant-numeric: tabular-nums; }
-    .pill.selected { background:#0f3b59; color:#fff; border-color:#0f3b59; }
-    .pill.selected .icon { opacity:1; }
-
-    .banner { padding: 10px; margin-top: 10px; border: 1px dashed #d0d7e3; border-radius: 10px; text-align: center; color: #445; background: #f7f9ff; }
-
-    /* utility */
-    .hide { display: none !important; }
-
-    /* modals */
-    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; align-items: center; justify-content: center; z-index: 50; }
-    .modal { background: #fff; border-radius: 12px; width: min(520px, 92vw); max-height: 80vh; overflow:auto; box-shadow: 0 10px 30px rgba(0,0,0,.2); }
-    .modal header { padding: 12px 16px; border-bottom: 1px solid #eee; display:flex; align-items:center; justify-content:space-between; }
-    .modal h3 { margin:0; font-size: 16px; }
-    .modal .content { padding: 12px 16px; }
-    .sel-list { display: grid; gap: 8px; }
-    .sel-item { display:flex; align-items:center; justify-content:space-between; border:1px solid #eee; border-radius:8px; padding:8px 10px; background:#fafafa; }
-    .sel-item .when { font-variant-numeric: tabular-nums; }
-    .modal footer { padding: 12px 16px; border-top: 1px solid #eee; display:flex; justify-content:flex-end; gap: 8px; }
-    .link-btn { background:none; border:none; color:#2a62d6; cursor:pointer; padding:6px 8px; }
-
-    /* loading modal */
-    .loading { display:flex; flex-direction:column; align-items:center; gap:10px; padding: 20px; }
-    .loading p { margin:0; color:#333; }
-    .spinner { width:36px; height:36px; border:3px solid #cfd8ff; border-top-color:#2a62d6; border-radius:50%; animation:spin .9s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .heat { border-radius: 10px; padding: 10px 12px; border: 1px solid #e5e7eb; margin: 6px 0; }
-    .heat-0 { background: #f3f4f6; }           /* 0 / empty */
-    .heat-1 { background: #e8f1ff; }
-    .heat-2 { background: #d6eaff; }
-    .heat-3 { background: #c3e3ff; }
-    .heat-4 { background: #b1dcff; }
-    .heat-5 { background: #9cd3ff; }           /* most */
-
-    /* Confirm question styling */
-    #confirmQuestionWrap { font-size: 13px; color: #666; }
-    #confirmQuestionWrap .cq-title { font-weight: 700; margin: 8px 0 6px; }
-    #confirmQuestionWrap .cq-row { display:flex; align-items:center; gap:8px; margin:4px 0; }
-    #confirmQuestionWrap label { cursor: pointer; }
-
-    /* USED / CLOSED state — green success variant */
-    .used-wrap { margin-top: 16px; }
-    .used-card {
-      border: 1px solid #e5e7eb; border-radius: 14px; background:#fff;
-      padding: 18px; display:flex; gap:14px; align-items:flex-start;
-      box-shadow: 0 2px 10px rgba(0,0,0,.04);
-    }
-    
-    /* Green tick on soft-green square */
-    .used-icon {
-      display: inline-grid; place-items: center;
-      width: 40px; height: 40px;                    /* square */
-      border-radius: 10px;
-      font-size: 22px; line-height: 1;
-      background:#e8f5e9;                           /* light green */
-      color:#166534;                                 /* dark green text */
-      border:1px solid #b7dfc2;                      /* soft green border */
-      padding:0;                                     /* square, not pill */
-    }
-    
-    .used-body { flex:1; }
-    .used-title { margin:0 0 6px; font-weight:800; font-size:18px; }
-    .used-sub { margin:0; color:#555; font-size:14px; }
-    .used-meta { margin-top:8px; font-size:13px; color:#666; }
-    
-    .used-actions { margin-top:12px; display:flex; gap:10px; align-items:center; }
-    
-    /* Buttons + chips in matching green */
-    .used-btn {
-      display:inline-block; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:14px;
-      border:1px solid #b7dfc2; background:#e8f5e9; color:#166534; font-weight:600;
-    }
-    .used-btn:hover { filter: brightness(0.98); }
-    
-    .used-chip {
-      display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px;
-      font-size:12px; font-weight:700;
-      border:1px solid #b7dfc2; background:#e8f5e9; color:#166534;
-    }
-
-    /* Landing step cards */
-    .landing-steps{
-      display:flex;
-      gap:12px;
-      flex-wrap:wrap;
-      margin-top:8px;
-    }
-    .step-card{
-      width:320px;                    /* fixed width */
-      min-height:110px;
-      border:1px solid #d9d4fb;       /* light lavender border */
-      border-radius:12px;
-      background:#ede9fe;             /* lavender fill */
-      padding:14px;
-      display:flex;
-      flex-direction:column;
-      justify-content:center;
       cursor:pointer;
-      user-select:none;
-      box-shadow:inset 0 -1px 0 rgba(255,255,255,.7);
-      transition:transform .06s ease, box-shadow .12s ease, filter .12s ease;
-    }
-    .step-card:hover{ filter:brightness(1.02); box-shadow:0 2px 10px rgba(0,0,0,.06); }
-    .step-card:active{ transform:translateY(1px); }
-    .step-card h3{ margin:0 0 6px; font-size:18px; font-weight:800; }
-    .step-card p { margin:0; font-size:14px; color:#374151; }
-    
-    /* step-card state variants + subtle link */
-    .step-card.active  { cursor: pointer; opacity: 1; }
-    .step-card.locked  { cursor: default; opacity: .98; }
-    .step-card.inactive{
-      background:#f3f4f6; border-color:#e5e7eb; color:#6b7280;
-      cursor: default; box-shadow:none;
-    }
-    .step-subtle{
-      margin-top:6px; font-size:12px; text-decoration:underline;
-      cursor:pointer; opacity:.85;
-    }
-    /* Booked/confirmed look for Step 1 */
-    .step-card.booked{
-      background:#e8f5e9;           /* soft green */
-      border-color:#b7dfc2;
-    }
-    .step-card.booked h3,
-    .step-card.booked p{
-      color:#166534;                 /* deep green text */
-    }
-    .step-card.booked:hover{ filter:brightness(0.98); }
 
-    .inline-controls{ display:flex; gap:8px; align-items:center; margin:8px 0 4px; }
-    .inline-controls .btn{ background:#fff; }
-    .inline-title{ font-weight:800; margin:0 0 6px; }
-
-    .inline-controls{ display:flex; gap:8px; align-items:center; margin:12px 0 4px; justify-content:center; }
-    .inline-title{ font-weight:800; margin:12px 0 6px; }
-
-    /* Step 2 — Agenda look & feel (wider, minimalist rows) */
-    #step2 .agenda-wrap{ max-width:652px; }
-    #step2 .agenda-title{ font-weight:800; margin:12px 0 6px; }
-    #step2 .agenda-list{ display:grid; }
-    #step2 .agenda-input-row{ display:flex; gap:8px; margin-top:8px; max-width:652px; }
-    #step2 .agenda-input-row input[type="text"]{ flex:1; }
-    
-    /* Minimal rows (override the generic .sel-item box style) */
-    #step2 .agenda-wrap .sel-item{
-      background: transparent;
-      border: none;
-      padding: 6px 0;
-      border-bottom: 1px solid #eee;
+      /* sizing/behavior */
+      display:block;
+      width: var(--pill-w);
+      white-space: nowrap;      /* don’t wrap */
+      overflow: hidden;         /* safety */
+      text-overflow: ellipsis;  /* safety */
     }
-    #step2 .agenda-wrap .sel-item:last-child{ border-bottom: none; }
-    #step2 .agenda-wrap .agenda-text{ font-weight:600; }
-    #step2 .agenda-wrap .agenda-actions{ display:flex; gap:6px; flex-shrink:0; opacity:.7; }
-    #step2 .agenda-wrap .sel-item:hover .agenda-actions{ opacity:1; }
-    #step2 .agenda-wrap .sel-item input[type="text"]{ width:100%; min-width:0; }
 
-    .save-status{
-      margin-left:auto;
-      display:flex;
+    .week-pill.disabled{
+      background:#f3f4f6;
+      color:#6b7280;
+      border-color:#e5e7eb;
+      cursor:default;
+    }
+
+    /* Week grid (inside a chosen week) */
+    .week-wrap{ border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:14px; }
+    .week-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .week-title{ font-weight:900; font-size:20px; }
+    .week-list{ display: grid; gap: 10px; }
+
+    .nav-btn{ padding:6px 10px; border:1px solid #e5e7eb; background:#fff; border-radius:8px; cursor:pointer; }
+    .grid{ border:1px solid #eee; border-radius:12px; overflow:hidden; margin-top:10px; }
+    .grid-header{ display:grid; grid-template-columns:repeat(7,1fr); }
+    .grid-header div{ text-align:center; font-size:12px; padding:6px 0; background:#fafafa; border-bottom:1px solid #eee; font-weight:800; }
+    .days{ display:grid; grid-template-columns:repeat(7,1fr); }
+    .day{ border-right:1px solid #f2f2f2; border-bottom:1px solid #f2f2f2; min-height:120px; padding:6px; }
+    .day:nth-child(7n){ border-right:none; }
+    .date{ font-size:12px; font-weight:700; color:#374151; }
+    .day.past .date{ color:#9ca3af; }
+    .day-body{ display:grid; gap:8px; }
+    .pill{ border:1px solid #c7d6e6; background:#f7fbff; border-radius:10px; padding:8px 10px; min-height:30px; display:flex; align-items:center; gap:8px; font-weight:600; font-size:13px; justify-content:center; }
+    .pill .icon{ width:1.1em; text-align:center; opacity:.55; }
+    .pill.selected{ background:#0f3b59; color:#fff; border-color:#0f3b59; }
+
+    /* Prep modal */
+    .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; z-index:50; }
+    .modal{ width:min(720px, 92vw); background:#fff; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.2); overflow:hidden; }
+    .modal header, .modal footer{ padding:12px 16px; border-bottom:1px solid #eee; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .modal footer{ border-top:1px solid #eee; border-bottom:none; }
+    .modal h3{ margin:0; font-size:18px; }
+    .modal .content{ padding:14px 16px; max-height:70vh; overflow:auto; }
+    .s2-row{ margin:12px 0; }
+    .s2-title{ font-weight:700; margin-bottom:6px; }
+    .s2-hint{ color:#6b7280; font-size:13px; margin-top:4px; }
+    .s2-input{ width:100%; box-sizing:border-box; }
+    textarea.s2-input{ min-height:70px; resize:vertical; }
+    .save-status{ font-size:12px; color:#6b7280; }
+
+    /* Agenda (Step 3 inline) */
+    .agenda-wrap{ margin-top:10px; }
+    .agenda-head{ display:flex; align-items:baseline; gap:10px; }
+    .agenda-title{ font-weight:800; }
+    .agenda-list{ display:grid; }
+    .sel-item{ display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #eee; padding:6px 0; }
+    .sel-item:last-child{ border-bottom:none; }
+    .agenda-input-row{ display:flex; gap:8px; margin-top:8px; }
+
+    /* Loading modal */
+    #loadingModal{ position:fixed; inset:0; z-index:9999; display:none; align-items:center; justify-content:center; }
+    #loadingModal .modal{ width:min(420px, 92vw); }
+    .loading{ padding:20px; display:flex; flex-direction:column; align-items:center; gap:12px; }
+    .spinner{ width:36px; height:36px; border:3px solid #cfd8ff; border-top-color:#2a62d6; border-radius:50%; animation:spin .9s linear infinite; }
+    @keyframes spin{ to{ transform: rotate(360deg); } }
+
+    .hide{ display:none !important; }
+
+    /* Inline expansion row that lives inside the timeline, under Step 1 */
+    .t-inline{
+      display: grid;
+      grid-template-columns: 28px 1fr;   /* spacer | content */
+      gap: 14px;
+      padding: 6px 0 12px;
+    }
+    .t-inline .t-spacer{
+      width: 18px;
+      height: 18px;                      /* keeps rail alignment under dots */
+      border-radius: 999px;
+    }
+    .t-inline .t-inline-body{
+      padding: 4px 0;
+    }
+
+    .timeline.card{
+      padding: var(--tl-pad-y) 14px var(--tl-pad-y) var(--left-gutter) !important;
+    }
+
+    /* (legacy) Month pager holder + next chevron */
+    .ov-holder{ position:relative; }
+    .ov-next{
+      position:absolute;
+      right:-6px;                  /* nudge outside the card area a touch */
+      top:50%;
+      transform:translateY(-50%);
+      width:38px; height:38px;
+      display:flex; align-items:center; justify-content:center;
+      border:1px solid #e5e7eb; background:#fff; border-radius:999px;
+      box-shadow:0 2px 8px rgba(0,0,0,.10);
+      cursor:pointer; font-size:20px; line-height:1;
+    }
+    .ov-next:disabled{ opacity:.45; cursor:default; }
+
+    /* Month pager flanking the inline body (‹ content ›) */
+    .ov-bar{
+      display:grid;
+      grid-template-columns:auto 1fr auto;  /* ‹ | content | › */
       align-items:center;
-      gap:10px;
-      font-size:12px;
-      color:#6b7280; /* slate-500 */
+      gap:8px;
     }
-    #s2SaveBtn { padding: 0 6px; }  /* keep it small */
+    .ov-bar > #landingInline{ min-width:0; } /* allow grid content to shrink */
 
-    /* Step 2: put the save UI right after the title text */
-    #step2 .week-head{
-      justify-content: flex-start;   /* not space-between */
-      align-items: baseline;         /* baseline-align with the title */
-      gap: 10px;                     /* small gap between title and save UI */
-      flex-wrap: wrap;               /* wrap on small screens */
+    .ov-nav{
+      width:32px; height:32px;
+      display:flex; align-items:center; justify-content:center;
+      border:1px solid #e5e7eb; background:#fff; border-radius:999px;
+      box-shadow:0 2px 8px rgba(0,0,0,.10);
+      cursor:pointer; font-size:18px; line-height:1;
     }
-    #step2 .save-status{
-      margin-left: 0;                /* remove the right-push */
-    }
-
-    /* Step 2 – Prep questions card */
-    .prep-card{
-      border: 1px solid #e5e7eb;          /* hairline */
-      border-radius: 12px;                 /* rounded */
-      background: #f9fafb;                 /* very light */
-      padding: 14px 16px;
-    }
-    .prep-card .cq-title{ font-weight: 700; margin: 6px 0 8px; }
-    .prep-card .cq-row{ display:flex; align-items:center; gap:8px; margin:6px 0; }
-    .prep-banner{font-weight:700}
-    .prep-hint{margin-top:4px;color:#666;font-size:13px}
+    .ov-nav:disabled{ opacity:.45; cursor:default; }
     
-    /* nice spacing before the agenda */
-    .prep-card + .agenda-wrap{ margin-top:16px; }
+    /* Left-align the agenda and give it an explicit width cap that still stretches */
+    #s3Mount.agenda-wrap{
+      width: min(100%, var(--agenda-width));  /* <-- not just max-width */
+      max-width: var(--agenda-width);
+      margin-left: 0;
+      margin-right: auto;
+    }
 
-    /* widen the prep card a bit */
-    #step2 .prep-card { max-width: 720px; }
-    
-    /* make all Step 2 inputs stretch */
-    #step2 .s2-input {
+    /* Make the list fill the container; one full-width column */
+    #s3Mount .agenda-list{
+      display: grid;
+      grid-template-columns: 1fr;   /* full-width track */
+      justify-items: stretch;       /* ensure children stretch */
       width: 100%;
-      box-sizing: border-box;
     }
-    
-    /* textarea: keep short by default but allow the user to expand vertically */
-    #step2 textarea.s2-input {
-      min-height: 66px;   /* ~3 rows */
-      resize: vertical;   /* let users drag taller if they want */
+
+    /* Input row should also fill the container */
+    #s3Mount .agenda-input-row{ width: 100%; }
+
+    /* Rows take the full line */
+    #s3Mount .sel-item{ width: 100%; }
+
+    /* Make the text input take the available space; keep the button natural size */
+    #s3Mount .agenda-input-row input[type="text"]{
+      flex: 1 1 400px;   /* grows, with a comfy starting width */
+      width: auto;       /* ignore intrinsic width */
+      min-width: 0;      /* allow shrinking in flex layouts (Safari fix) */
     }
+
+    #s3Mount .agenda-input-row .btn{
+      flex: 0 0 auto;    /* don't let the button stretch */
+    }
+
+    /* Top-align just the step that has inline content (agenda) */
+    .t-step.align-top { align-items: flex-start; }
+    /* Keep the dot flush with the title line */
+    .t-step.align-top .t-body { padding-top: 0; }
+    .t-step.align-top .t-dot { align-self: flex-start; }
+
+    /* white button, purple text, very thin black outline */
+    .btn.ghost{
+      background:#fff;
+      color: var(--purple);
+      border: 1px solid rgba(0,0,0,.55);
+    }
+    .btn.ghost:disabled{ opacity:.6; cursor:default; }
 
 
   </style>
+
+
 </head>
 <body>
+  <!-- LOADING -->
+  <div id="loadingModal" class="modal-backdrop" style="display:flex;">
+    <div class="modal"><div class="loading"><div class="spinner"></div><div id="loadingMsg">Loading…</div></div></div>
+  </div>
 
-  <!-- Loading modal -->
-  <div class="modal-backdrop" id="loadingModal" style="display:flex;">
+  <!-- PREP QUESTIONS MODAL (Step 2) -->
+  <div id="prepModal" class="modal-backdrop">
     <div class="modal">
-      <div class="loading">
-        <div class="spinner" aria-hidden="true"></div>
-        <p aria-live="polite" id="loadingMsg">Fetching availability…</p>
-      </div>
-    </div>
-  </div>
-
-  <div id="app" inert aria-hidden="true">
-  
-  <h1 class="hide">Pick meeting times</h1>
-
-  <div class="notice" id="notice">
-    Pick up a week, and we’ll search 
-    <span id="colleagueName"></span>’s calendar for availability - including enough time for their preparation.
-  </div>
-
-  <div class="breadcrumb hide" id="crumb"></div>
-
-  <!-- LANDING -->
-  <div id="landingView">
-    <div class="week-wrap">
-      <div class="week-head">
-        <div class="week-title">Book a session with <span id="landingColleague"></span></div>
-      </div>
-  
-      <div class="landing-steps">
-        <div class="step-card" id="step1Card">
-          <h3>Step 1</h3>
-          <p>Pick a time that works for you.</p>
+      <header>
+        <h3 id="prepTitle">Provide extra input to help prepare</h3>
+        <div class="save-status" id="prepSaveTop">Not saved yet</div>
+      </header>
+      <div class="content" id="prepContent"></div>
+      <footer>
+        <div class="save-status" id="prepSaveBottom">Not saved yet</div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn secondary" id="prepCloseBtn">Close</button>
+          <button class="btn" id="prepSaveBtn" disabled>Save</button>
         </div>
-        <div class="step-card" id="step2Card">
-          <h3>Step 2</h3>
-          <p>Share some details below so we can prepare.</p>
-        </div>
-      </div>
-      <div id="landingInline" style="margin-top:12px;"></div>
+      </footer>
     </div>
   </div>
 
-  <!-- OVERVIEW -->
-  <div id="overviewView">
-    <div class="ov-grid" id="ovGrid"></div>
-  </div>
-
-  <!-- WEEK -->
-  <div id="weekView" class="hide">
-    <div class="week-wrap">
-      <div class="week-head">
-        <button class="nav-btn" id="prevWeek">←</button>
-        <div class="week-title" id="weekTitle"></div>
-        <button class="nav-btn" id="nextWeek">→</button>
-      </div>
-
-      <div class="grid">
-        <div class="grid-header">
-          <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
-        </div>
-        <div class="days" id="weekDays"></div>
-      </div>
-
-      <div class="banner hide" id="emptyWeekBanner">No availability this week.</div>
-      <div class="notice" id="weekMeta"></div>
-    </div>
-  </div>
-
-<!-- STEP 2 PANEL -->
-<div id="step2" class="hide">
-  <div class="week-wrap">
-    <div class="week-head">
-      <div class="week-title">
-        Step 2: Help <span id="s2Colleague"></span> prepare
-      </div>
-
-      <!-- compact save status / action (right side) -->
-      <div class="save-status" id="s2SaveUI">
-        <span id="s2LastSaved">Not saved yet</span>
-        <button class="link-btn" id="s2SaveBtn" style="display:none;">
-          Save recent changes 💾
-        </button>
-      </div>
-    </div>
-
-    <!-- subheading + required hint sit under the header -->
-    <div class="notice" id="s2Sub" style="display:none;margin-top:6px;"></div>
-    <div id="s2ReqHint" class="notice" style="display:none;margin-top:6px;"></div>
-
-    <!-- questions/agenda mount point -->
-    <div id="s2Questions" class="notice" style="margin-top:12px;"></div>
-  </div>
-</div>
-
-
-
-  <!-- CONFIRM MODAL (single-select flow) -->
-  <div class="modal-backdrop" id="confirmModal">
+  <!-- CONFIRM BOOKING MODAL -->
+  <div id="confirmModal" class="modal-backdrop">
     <div class="modal">
       <header>
         <h3>Confirm time</h3>
-        <button class="link-btn" id="closeConfirm">Close</button>
+        <button class="link" id="closeConfirm">Close</button>
       </header>
       <div class="content">
         <p id="confirmWhen" class="notice"></p>
         <p id="confirmPrep" class="notice" style="display:none"></p>
         <div id="inviteList"></div>
-        <button class="link-btn" id="addInviteBtn">+ Add another</button>
+        <button class="link" id="addInviteBtn">+ Add another</button>
         <input type="email" id="newInviteInput" class="hide" placeholder="Enter email" />
-        <div id="confirmQuestionWrap" class="hide" style="margin-top:12px;"></div>
       </div>
       <footer>
         <button class="btn" id="confirmBtn">Confirm</button>
@@ -449,2575 +406,960 @@
     </div>
   </div>
 
+  <!-- HEADER -->
+  <div class="h-wrap">
+    <div id="eyebrow" class="h-eyebrow"></div>
+    <div id="title" class="h-title"></div>
+  </div>
+  <div id="smallNotice" class="notice"></div>
+
+  <!-- TIMELINE -->
+  <div class="timeline card" id="timelineWrap">
+    <div id="timeline"></div>
   </div>
 
 <script>
-  /**********************
-   * CONFIG
-   **********************/
-  // TODO: replace with your deployed Apps Script Web App URL (ends with /exec)
+  /* =====================
+   * CONFIG / API ENDPOINTS
+   * ===================== */
   const API_BASE = 'https://script.google.com/macros/s/AKfycbwqqw_6MRAR9zkkDg6-vUNNETC1UQpS0sdIF6iSh-zT29FbKOcZkkkN-x3aqkvdyI7f8A/exec';
-
-  // Token comes from URL: https://.../index.html?token=abc123
   const token = (new URLSearchParams(location.search).get('token') || '').trim();
 
-  /**********************
-   * Small helpers
-   **********************/
-  function debounce(fn, wait) {
-    let t;
-    return function (...args) {
-      clearTimeout(t);
-      t = setTimeout(() => fn.apply(this, args), wait);
-    };
-  }
-
-  function goToOverview(){
-    showOnly('overview');
-    setBreadcrumbForOverview();
-    renderOverview();
-  }
-
-
-  async function apiGet(action, params) {
-    const qs = new URLSearchParams({ action, ...(params || {}) });
-    qs.set('ts', Date.now()); // cache buster
-    const res = await fetch(`${API_BASE}?${qs.toString()}`, {
-      credentials: 'omit',
-      cache: 'no-store'
-    });
-    if (!res.ok) throw new Error(`GET ${action} failed: ${res.status}`);
-    return res.json();
-  }
-  
-  async function apiPost(action, params, body) {
-    const qs = new URLSearchParams({ action, ...(params || {}) });
-    qs.set('ts', Date.now()); // cache buster
-    const res = await fetch(`${API_BASE}?${qs}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(body || {}),
-      credentials: 'omit',
-      cache: 'no-store'
-    });
-    const data = await res.json();
-    if (data && data.error) throw new Error(data.error);
-    return data;
-  }
-
-
-  function buildMonthWeeksFromWeekList(weeks) {
-    // weeks: [{ mondayKey, startISO, weekNum, selectable }]
-    const monthWeeks = new Map();
-    (weeks || []).forEach(w => {
-      const startISO = String(w.startISO);
-      const ym = startISO.slice(0, 7); // "YYYY-MM"
-      if (!monthWeeks.has(ym)) monthWeeks.set(ym, []);
-      monthWeeks.get(ym).push({
-        week: w.mondayKey ? `W${String(w.weekNum).padStart(2,'0')}` : `W${w.weekNum}`,
-        weekNum: Number(w.weekNum),
-        startISO,
-        selectable: !!w.selectable
-      });
-    });
-    for (const arr of monthWeeks.values()) {
-      arr.sort((a,b) => a.startISO.localeCompare(b.startISO));
-    }
-    return monthWeeks;
-  }
-
-  async function saveInviteesOnce({ suggestedInvitees, preselectedCustomerEmails, reason }) {
-    try {
-      // Persist suggested list
-      await apiPost('saveSuggestedInvitees', { token }, {
-        emails: Array.isArray(suggestedInvitees) ? suggestedInvitees : []
-      });
-  
-      // Persist the “checked”/preselected list
-      await apiPost('saveCustomerEmails', { token }, {
-        emails: Array.isArray(preselectedCustomerEmails) ? preselectedCustomerEmails : []
-      });
-  
-      // (Optional) you can log reason somewhere client-side if you like
-      // console.debug('Invitees saved:', { reason });
-    } catch (e) {
-      console.error('saveInvitees failed:', e);
-    }
-  }
-
-
-  // Put this near your other helpers (top of <script>)
-  const coerceCqs = (v) => {
-    if (!v) return [];
-    if (Array.isArray(v)) return v;
-    if (typeof v === 'string') {
-      try { const j = JSON.parse(v); return Array.isArray(j) ? j : []; } catch {}
-    }
-    return [];
-  };
-
-  function escapeHtml(s='') {
-    return String(s)
-      .replace(/&/g,'&amp;')
-      .replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;')
-      .replace(/"/g,'&quot;')
-      .replace(/'/g,'&#39;');
-  }
-
-// ⬇️ put near other date helpers
-function quarterStartMondayKey(tz){
-  const parts = fmtParts(new Date(), tz);
-  const y = +parts.find(p=>p.type==='year').value;
-  const m = +parts.find(p=>p.type==='month').value;          // 1..12 in user's tz
-  const qStartMonth = Math.floor((m-1)/3)*3 + 1;             // 1,4,7,10
-  const firstKey = `${y}-${String(qStartMonth).padStart(2,'0')}-01`;
-  return mondayKey(firstKey);
-}
-
-// Build weeks for the *current* quarter (shows past weeks as .disabled)
-function generateWeeksForCurrentQuarter({
-  initialTz = 'UTC',
-  minNoticeDays = 0,
-  weekdaysCSV = 'Mon,Tue,Wed,Thu,Fri',
-  blackoutDatesCSV = ''
-} = {}) {
-  const startMon = quarterStartMondayKey(initialTz);
-
-  // first day *after* the quarter
-  const parts = fmtParts(new Date(), initialTz);
-  const y = +parts.find(p=>p.type==='year').value;
-  const m = +parts.find(p=>p.type==='month').value;
-  const qStartMonthIdx = Math.floor((m-1)/3)*3;              // 0,3,6,9
-  const after = new Date(Date.UTC(y, qStartMonthIdx + 3, 1)); // month after quarter
-  const afterKey = `${after.getUTCFullYear()}-${String(after.getUTCMonth()+1).padStart(2,'0')}-01`;
-  const afterMon = mondayKey(afterKey);
-
-  const allowedWeekdays = parseAllowedWeekdays(weekdaysCSV);
-  const blackouts = new Set(
-    String(blackoutDatesCSV||'').split(/[,\s]+/).map(s=>s.trim()).filter(s=>/^\d{4}-\d{2}-\d{2}$/.test(s))
-  );
-  const today = todayKey(initialTz);
-  const minStartKey = plusDaysKey(today, minNoticeDays);
-
-  const out = [];
-  for (let wk = startMon; wk < afterMon; wk = plusDaysKey(wk, 7)) {
-    const days = weekDaysFromMondayKey(wk);
-    // selectable only if any allowed day is on/after minStart and not blacked out
-    const selectable = days.some(d =>
-      d >= minStartKey &&
-      !blackouts.has(d) &&
-      allowedWeekdays.has(dayOfWeekFromKey(d))
-    );
-    out.push({
-      startISO: new Date(wk + 'T00:00:00Z').toISOString(),
-      weekNum:  isoWeekNumberFromKey(wk),
-      selectable
-    });
-  }
-  return out;
-}
-
-  
-  /**********************
-   * Debounced server writes
-   **********************/
-  function makeDebounce(fn, wait=400){
-    let t, lastArgs;
-    const call = (...args) => { lastArgs=args; clearTimeout(t); t=setTimeout(()=>{fn(...lastArgs); t=null;}, wait); };
-    call.flush = () => { if (t){ clearTimeout(t); fn(...(lastArgs||[])); t=null; } };
-    return call;
-  }
-
-  /**********************
-   * State & DOM refs
-   **********************/
-  let initialTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-
-  let MAX_SELECT = 1;
-
+  /* =====================
+   * STATE
+   * ===================== */
   const state = {
-    tz: initialTz,
-    dayCounts: new Map(),
-    weekTotals: new Map(),
+    meta: null,
+    tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    weekCache: new Map(),
     monthWeeks: new Map(),
     currentWeek: null,
-    weekCache: new Map(),
+    confirmQuestions: [],
     suggestedInvitees: [],
     preselectedCustomerEmails: [],
-    confirmQuestions: [],    
-    stage: 'overview',
-    lastBooked: null,   // {start: Date, end: Date}
-    lastPrep: null      // {start: Date, end: Date} | null
+    stateJSON: { version:1, lastEditedAtISO:null, prep:{answers:{}}, agenda:{items:[]} },
+    calendarAccessOk: true,
+    monthPager: { offset: 0, visible: 3 },
   };
 
-  // Whether the colleague (owner of this booking link) has a connected calendar
-  state.calendarAccessOk = true; // default; we’ll derive from meta at init
+  /* =====================
+   * UTILITIES
+   * ===================== */
+  const $ = sel => document.querySelector(sel);
+  function showLoading(msg){ $('#loadingMsg').textContent = msg || 'Loading…'; $('#loadingModal').style.display='flex'; }
+  function hideLoading(){ $('#loadingModal').style.display='none'; }
 
-
-  // Shared working state for the confirm modal, accessible to close/backdrop handlers
-  const confirmDraft = {
-    candidates: [],           // [{ email, _userAdded?, _preselected?, _suggested? }]
-    selected: new Set(),      // lowercased emails that are checked
-    dirty: false
-  };
-  
-  function collectInviteesForSave() {
-    return {
-      suggestedInvitees: confirmDraft.candidates.map(c => String(c.email).trim()),
-      preselectedCustomerEmails: Array.from(confirmDraft.selected).map(x => String(x).trim())
-    };
+  function apiGet(action, params){
+    const qs = new URLSearchParams({ action, ...(params||{}) });
+    return fetch(`${API_BASE}?${qs.toString()}&ts=${Date.now()}`, { cache:'no-store' }).then(r=>r.json());
+  }
+  function apiPost(action, params, body){
+    const qs = new URLSearchParams({ action, ...(params||{}) });
+    return fetch(`${API_BASE}?${qs.toString()}&ts=${Date.now()}`, {
+      method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify(body||{})
+    }).then(r=>r.json());
   }
 
-  let pendingWeekKey = null;
+  // dates
+  function fmtDate(d, tz){ return new Intl.DateTimeFormat('en-GB', { timeZone: tz, weekday:'short', year:'numeric', month:'short', day:'numeric' }).format(d); }
+  function fmtTime(d, tz){ return new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour:'2-digit', minute:'2-digit', hour12:false }).format(d).replace(':','h'); }
+  function fmtRange(s, e, tz){ return `${fmtTime(s,tz)}–${fmtTime(e,tz)}`; }
+  function ymdKey(date, tz){ const p = new Intl.DateTimeFormat('en-GB',{ timeZone:tz, year:'numeric', month:'2-digit', day:'2-digit'}).formatToParts(date); return `${p.find(x=>x.type==='year').value}-${p.find(x=>x.type==='month').value}-${p.find(x=>x.type==='day').value}`; }
+  function todayKey(tz){ return ymdKey(new Date(), tz); }
+  function plusDaysKey(key, n){ const d = new Date(key+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`; }
+  function mondayKey(key){ const d = new Date(key+'T00:00:00Z'); const js=d.getUTCDay(); const delta = js===0 ? -6 : 1-js; d.setUTCDate(d.getUTCDate()+delta); return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`; }
+  function weekDaysFromMondayKey(mon){ return Array.from({length:7}, (_,i)=>plusDaysKey(mon,i)); }
+  function isoWeekNumberFromKey(dayKey){ const d=new Date(dayKey+'T00:00:00Z'); const day=d.getUTCDay()||7; d.setUTCDate(d.getUTCDate()+4-day); const yearStart=new Date(Date.UTC(d.getUTCFullYear(),0,1)); return Math.ceil((((d-yearStart)/86400000)+1)/7); }
+  function formatWeekLabel(startISO){ const d=new Date(startISO); const m=d.toLocaleString('en-US',{month:'long', timeZone:'UTC'}); const day=d.getUTCDate(); const ord = (n)=>{const a=n%10,b=n%100; return (b>=11&&b<=13)?'th':(a===1?'st':a===2?'nd':a===3?'rd':'th')}; return `Week of ${m} ${day}${ord(day)}`; }
 
-  
-  const crumb = document.getElementById('crumb');
-  
-  const overviewView = document.getElementById('overviewView');
-  const ovGrid = document.getElementById('ovGrid');
-  const weekView = document.getElementById('weekView');
-  const weekTitleEl = document.getElementById('weekTitle');
-  const weekDaysEl = document.getElementById('weekDays');
-  const prevWeekBtn = document.getElementById('prevWeek');
-  const nextWeekBtn = document.getElementById('nextWeek');
-  const weekMetaEl = document.getElementById('weekMeta');
-  const emptyWeekBanner = document.getElementById('emptyWeekBanner');
-  const loadingModal = document.getElementById('loadingModal');
-  const loadingMsg = document.getElementById('loadingMsg');
-  const confirmModal = document.getElementById('confirmModal');
-  const confirmWhen = document.getElementById('confirmWhen');
-  let confirmBtn = document.getElementById('confirmBtn');
-  const closeConfirm = document.getElementById('closeConfirm');
-  const colleagueNameEl = document.getElementById('colleagueName');
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && confirmModal.style.display === 'flex') {
-      closeConfirmModal(true); // also clears pending pill
-    }
-  });
-
-  // Backdrop click: save if dirty, then close
-  confirmModal.addEventListener('click', async (e) => {
-    if (e.target === confirmModal) {
-      if (state.calendarAccessOk && confirmDraft.dirty) {
-        const { suggestedInvitees, preselectedCustomerEmails } = collectInviteesForSave();
-        await saveInviteesOnce({ suggestedInvitees, preselectedCustomerEmails, reason: 'dismiss' });
-        confirmDraft.dirty = false;
-      }
-      closeConfirmModal(true);
-    }
-  });
-  
-  closeConfirm.onclick = async () => {
-    if (state.calendarAccessOk && confirmDraft.dirty) {
-      const { suggestedInvitees, preselectedCustomerEmails } = collectInviteesForSave();
-      await saveInviteesOnce({ suggestedInvitees, preselectedCustomerEmails, reason: 'close' });
-      confirmDraft.dirty = false;
-    }
-    closeConfirmModal(true);
-  };
-
-
-
-  let pendingIso = null;
-  let pendingPill = null;
-
-  /**********************
-   * Utilities (unchanged)
-   **********************/
-  function fmtParts(date, tz) { return new Intl.DateTimeFormat('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date); }
-  function ymdKey(date, tz) { const p = fmtParts(date, tz); return `${p.find(x => x.type === 'year').value}-${p.find(x => x.type === 'month').value}-${p.find(x => x.type === 'day').value}`; }
-  function monthTitle(y, m) { return new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en-GB', { month: 'long', year: 'numeric' }); }
-  function mondayKey(key) { const d = new Date(key + 'T00:00:00Z'); const js = d.getUTCDay(); const delta = js === 0 ? -6 : 1 - js; d.setUTCDate(d.getUTCDate() + delta); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`; }
-  function plusDaysKey(key, n) { const d = new Date(key + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`; }
-  function tzTimeHM(date, tz) { const s = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(date); return s.replace(':', 'h'); }
-  function todayKey(tz) { return ymdKey(new Date(), tz); }
-  function isoWeekNumberFromKey(dayKey) { const d = new Date(dayKey + 'T00:00:00Z'); const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - day); const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1)); return Math.ceil((((d - yearStart) / 86400000) + 1) / 7); }
-  function weekDaysFromMondayKey(monKey) { return Array.from({ length: 7 }, (_, i) => plusDaysKey(monKey, i)); }
-  function parseSlots(raw) {
+  function parseSlots(raw){
     return (raw || [])
       .map(s => ({
         start: new Date(s.start),
         end:   new Date(s.end),
-        // keep the server’s chosen prep block (if any)
         prep:  (s.prep && s.prep.start && s.prep.end)
           ? { start: new Date(s.prep.start), end: new Date(s.prep.end) }
           : null
       }))
-      .filter(s => !isNaN(s.start) && !isNaN(s.end));
+      .filter(s => !isNaN(+s.start) && !isNaN(+s.end));
   }
 
-  function ordinal(n) { const mod10 = n % 10, mod100 = n % 100; if (mod100 >= 11 && mod100 <= 13) return 'th'; switch (mod10) { case 1: return 'st'; case 2: return 'nd'; case 3: return 'rd'; default: return 'th'; } }
-  function formatWeekLabel(startISO) { const d = new Date(startISO); const month = d.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' }); const day = d.getUTCDate(); return `Week of ${month} ${day}${ordinal(day)}`; }
-  function isoWeekMonday(y, w) { const jan4 = new Date(Date.UTC(y, 0, 4)); const day = jan4.getUTCDay() || 7; const monW1 = new Date(jan4); monW1.setUTCDate(jan4.getUTCDate() - day + 1); const d = new Date(monW1); d.setUTCDate(monW1.getUTCDate() + (w - 1) * 7); return d; }
+  function debounce(fn, wait){ let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), wait); } }
+  const nextFrame = () => new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
 
-    function fmtDateLocal(d, tz) {
-      return new Intl.DateTimeFormat('en-GB', {
-        timeZone: tz, weekday:'short', year:'numeric', month:'short', day:'numeric'
-      }).format(d);
-    }
-    function fmtTimeLocal(d, tz) {
-      return new Intl.DateTimeFormat('en-GB', {
-        timeZone: tz, hour:'2-digit', minute:'2-digit', hour12:false
-      }).format(d).replace(':','h');
-    }
-    function fmtRangeLocal(s, e, tz) { return `${fmtTimeLocal(s, tz)}–${fmtTimeLocal(e, tz)}`; }
- 
-    // track what was booked (handy if you reference later)
-    state.stage = 'overview';
-    state.lastBooked = null;   // {start: Date, end: Date}
-    state.lastPrep   = null;   // {start: Date, end: Date} | null
-
-  /**********************
-   * View toggles + loading UI
-   **********************/
-  function setTabs(active) {
-    [tabOverview, tabWeek].forEach(t => t.classList.remove('active'));
-    ({ overview: tabOverview, week: tabWeek }[active]).classList.add('active');
-  }
-  function showOnly(view) {
-    const onLanding = view === 'landing';
-    document.querySelector('h1')?.classList.toggle('hide', onLanding);
-    document.getElementById('notice')?.classList.toggle('hide', onLanding);
-    document.getElementById('crumb')?.classList.toggle('hide', onLanding);
-  
-    document.getElementById('landingView')?.classList.toggle('hide', !onLanding);
-    document.getElementById('overviewView')?.classList.toggle('hide', view !== 'overview');
-    document.getElementById('weekView')?.classList.toggle('hide', view !== 'week');
-  }  
-  const landingView = document.getElementById('landingView');
-  function setBreadcrumbForLanding(){ crumb.textContent = 'Welcome'; }
-  function setBreadcrumbForOverview() { crumb.textContent = 'View: Overview'; }
-  function setBreadcrumbForWeek(monKey) {
-    const d = new Date(monKey + 'T00:00:00Z');
-    const label = `${d.toLocaleString('en-GB', { month: 'long', year: 'numeric' })} • Week ${isoWeekNumberFromKey(monKey)}`;
-    crumb.innerHTML = `View: <a onclick="renderOverview()">Overview</a> / ${label}`;
-  }
-  function showLoading(msg) { if (msg) loadingMsg.textContent = msg; loadingModal.style.display = 'flex'; }
-  function hideLoading() { loadingModal.style.display = 'none'; loadingMsg.textContent = 'Fetching availability…'; }
-
-  /**********************
-   * Overview rendering
-   **********************/
-  function renderOverview() {
-    showOnly('overview');
-    setBreadcrumbForOverview();
-  
-    ovGrid.innerHTML = '';
-    if (!state?.monthWeeks || state.monthWeeks.size === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'notice';
-      empty.textContent = 'No weeks available in the current window.';
-      ovGrid.appendChild(empty);
-      return;
-    }
-
-    console.log('🟪 Rendering overview weeks:', [...state.monthWeeks.entries()]);
-  
-    const months = [...state.monthWeeks.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
-    months.forEach(([ym, weeks]) => {
-      const [y, m] = ym.split('-').map(Number);
-  
-      const card = document.createElement('div'); card.className = 'mcard';
-      const head = document.createElement('div'); head.className = 'mhead';
-      const name = document.createElement('div'); name.className = 'mname'; name.textContent = monthTitle(y, m);
-      head.appendChild(name); card.appendChild(head);
-  
-      const list = document.createElement('div'); list.className = 'weeks';
-  
-      weeks.forEach(w => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'week-pill';
-        btn.textContent = `${formatWeekLabel(w.startISO)} — Wk ${w.weekNum}`;
-  
-        const monKey = w.startISO.slice(0,10);
-        if (!w.selectable) {
-          // too soon (within minNoticeDays): show muted & disabled
-          btn.classList.add('disabled');
-          btn.disabled = true;
-        } else {
-          btn.addEventListener('click', () => openWeek(monKey));
-        }
-        list.appendChild(btn);
-      });
-  
-      card.appendChild(list);
-      ovGrid.appendChild(card);
-    });
-  
-    hideLoading();
-  }
-
-  function renderUsedState(meta) {
-    // Hide interactive UI
-    document.querySelector('.controls')?.classList.add('hide');
-    document.getElementById('overviewView')?.classList.add('hide');
-    document.getElementById('weekView')?.classList.add('hide');
-  
-    // Title
-    const h1 = document.querySelector('h1');
-    if (h1) h1.textContent = 'Booking confirmed!';
-  
-    // Remove the small notice bar
-    document.getElementById('notice')?.classList.add('hide');
-  
-    // Card
-    const wrap = document.createElement('div');
-    wrap.className = 'used-wrap';
-  
-    const card = document.createElement('div');
-    card.className = 'used-card';
-  
-    const icon = document.createElement('div');
-    icon.className = 'used-icon';
-    icon.textContent = '🗓️';
-  
-    const body = document.createElement('div');
-    body.className = 'used-body';
-  
-    const title = document.createElement('h2');
-    title.className = 'used-title';
-    title.textContent = 'We are looking forward to the session';
-  
-    const sub = document.createElement('p');
-    sub.className = 'used-sub';
-    sub.textContent = 'Thanks for booking. If you need to reschedule, we can help.';
-  
-    // Who / type line
-    const metaLine = document.createElement('div');
-    metaLine.className = 'used-meta';
-    const who = meta?.colleagueInitials ? ` with ${meta.colleagueInitials}` : '';
-    const mt  = meta?.meetingType ? ` — ${meta.meetingType}` : '';
-    metaLine.textContent = `Status: ${meta?.status || 'USED'}${who}${mt}`;
-  
-    // NEW: booked time line
-    const tz = meta?.initialTz || 'UTC';
-    const fmt = new Intl.DateTimeFormat('en-GB', {
-      timeZone: tz, weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
-      hour: '2-digit', minute: '2-digit', hour12: false
-    });
-  
-    const bookedLine = document.createElement('div');
-    bookedLine.className = 'used-meta';
-    if (meta?.bookedStartISO) {
-      const d = new Date(meta.bookedStartISO);
-      if (!isNaN(+d)) bookedLine.textContent = `Meeting time: ${fmt.format(d)}`;
-    } else if (meta?.bookedAtISO) {
-      const d = new Date(meta.bookedAtISO);
-      if (!isNaN(+d)) bookedLine.textContent = `Booked on: ${fmt.format(d)}`;
-    }
-  
-    // NEW: colleague email line + action
-    const emailLine = document.createElement('div');
-    emailLine.className = 'used-meta';
-    if (meta?.colleagueEmail) {
-      const a = document.createElement('a');
-      a.href = `mailto:${encodeURIComponent(meta.colleagueEmail)}?subject=Reschedule%20my%20meeting`;
-      a.textContent = meta.colleagueEmail;
-      emailLine.textContent = 'Contact: ';
-      emailLine.appendChild(a);
-    }
-  
-    const actions = document.createElement('div');
-    actions.className = 'used-actions';
-  
-    const usedChip = document.createElement('span');
-    usedChip.className = 'used-chip';
-    usedChip.textContent = 'USED';
-    actions.appendChild(usedChip);
-  
-    if (meta?.allowRebook) {
-      const info = document.createElement('span');
-      info.className = 'used-sub';
-      info.textContent = 'Rebooking is enabled for this link.';
-      actions.appendChild(info);
-    }
-  
-    body.append(title, sub, metaLine);
-    if (bookedLine.textContent) body.append(bookedLine);
-    if (emailLine.textContent) body.append(emailLine);
-    body.append(actions);
-  
-    card.append(icon, body);
-    wrap.append(card);
-  
-    const afterH1 = document.querySelector('h1');
-    if (afterH1 && afterH1.parentNode) {
-      afterH1.parentNode.insertBefore(wrap, afterH1.nextSibling);
-    } else {
-      document.body.prepend(wrap);
-    }
-    refreshLandingCards({ metaOverride: meta });
-  }
-
-  /**********************
-   * Week data & rendering (fetch via API)
-   **********************/
-  function ensureWeekLoaded(mondayKey, { prefetch=false } = {}) {
-    if (state.weekCache.has(mondayKey)) return Promise.resolve(state.weekCache.get(mondayKey));
-    pendingWeekKey = mondayKey;
-    return loadWeekCoarseToFine(mondayKey, { prefetch })
-      .then(payload => {
-        if (!prefetch && state.currentWeek === mondayKey && pendingWeekKey === mondayKey) {
-          renderWeek(payload);
-        }
-        return payload;
-      })
-      .catch(err => {
-        if (!prefetch) alert('Failed to load week.\n' + (err && err.message ? err.message : String(err)));
-        throw err;
-      })
-      .finally(() => { if (pendingWeekKey === mondayKey) pendingWeekKey = null; });
-  }
-
-  function openWeek(mondayKey) {
-    state.currentWeek = mondayKey;
-    showOnly('week');
-    setBreadcrumbForWeek(mondayKey);
-    setWeekHeader(mondayKey);
-    showLoading('Loading this week…');
-  
-    ensureWeekLoaded(mondayKey).then(() => {
-      if (state.currentWeek === mondayKey) prefetchNeighbors(mondayKey);
-    });
-  }
-
-  function setWeekHeader(mondayKey) {
-    const d = new Date(mondayKey + 'T00:00:00Z');
-    weekTitleEl.textContent = `${d.toLocaleString('en-GB', { month: 'long', year: 'numeric' })} • Week ${isoWeekNumberFromKey(mondayKey)}`;
-  }
-
-  function prefetchNeighbors(mondayKey) {
-    const next = plusDaysKey(mondayKey, 7);
-    const prev = plusDaysKey(mondayKey, -7);
-    // For prefetch, do the 60-min pass only (fast & light)
-    fetchWeekAtGranularity(next, 60).then(r => {
-      state.weekCache.set(next, { slotsParsed: r.parsed, exactCount: r.count });
-    }).catch(()=>{});
-    fetchWeekAtGranularity(prev, 60).then(r => {
-      state.weekCache.set(prev, { slotsParsed: r.parsed, exactCount: r.count });
-    }).catch(()=>{});
-  }
-
-function renderWeek(payload) {
-  setWeekHeader(state.currentWeek);
-
-  const days = weekDaysFromMondayKey(state.currentWeek);
-  const today = todayKey(state.tz);
-  const byDay = new Map(days.map(k => [k, []]));
-  payload.slotsParsed.forEach(s => {
-    const key = ymdKey(s.start, state.tz);
-    if (byDay.has(key)) byDay.get(key).push(s);
-  });
-  days.forEach(k => byDay.get(k).sort((a, b) => a.start - b.start));
-
-  weekDaysEl.innerHTML = '';
-  days.forEach(dayKey => {
-    const inPast = dayKey < today;
-    const dNum = Number(dayKey.slice(-2));
-    const col = document.createElement('div');
-    col.className = 'day' + (inPast ? ' past' : '');
-    const header = document.createElement('div'); header.className = 'day-header';
-    const dateEl = document.createElement('div'); dateEl.className = 'date'; dateEl.textContent = dNum;
-    header.appendChild(dateEl); col.appendChild(header);
-
-    const body = document.createElement('div'); body.className = 'day-body';
-    const items = byDay.get(dayKey) || [];
-    items.forEach(slot => {
-      const iso = slot.start.toISOString();
-      const pill = document.createElement('button');
-      pill.type = 'button';
-      pill.className = 'pill';
-
-      const icon = document.createElement('span'); icon.className = 'icon'; icon.textContent = '○';
-      const label = document.createElement('span'); label.className = 'label';
-      label.textContent = `${tzTimeHM(slot.start, state.tz)} – ${tzTimeHM(slot.end, state.tz)}`;
-      pill.append(icon, label);
-
-      pill.onclick = () => {
-        // single-select: visually mark the current one
-        document.querySelectorAll('.pill.selected').forEach(el => {
-          if (el !== pill) {
-            el.classList.remove('selected');
-            const ic = el.querySelector('.icon'); if (ic) ic.textContent = '○';
-          }
-        });
-        pill.classList.add('selected'); icon.textContent = '✓';
-        pendingIso = iso;
-        pendingPill = pill;
-        openConfirmModal(iso, slot);
-      };
-
-      body.appendChild(pill);
-    });
-
-    col.appendChild(body);
-    weekDaysEl.appendChild(col);
-  });
-
-  emptyWeekBanner.classList.toggle('hide', (payload.exactCount || 0) > 0);
-  weekMetaEl.textContent = `Found ${payload.exactCount || 0} slot${(payload.exactCount || 0) === 1 ? '' : 's'}.`;
-  hideLoading();
-}
-
-
-  /**********************
-   * Confirm modal
-   **********************/
-  function parseOptionsLoose(raw) {
-    if (Array.isArray(raw)) {
-      if (raw.length === 1 && /^\s*\[/.test(raw[0])) { try { const j = JSON.parse(raw[0]); if (Array.isArray(j)) return j; } catch { } }
-      return raw.map(String);
-    }
-    if (typeof raw === 'string') {
-      const s = raw.trim();
-      if (s.startsWith('[') && s.endsWith(']')) { try { const j = JSON.parse(s); if (Array.isArray(j)) return j; } catch { } }
-      return s.split(/[\n,;|]/).map(x => x.trim()).filter(Boolean);
-    }
-    return [];
-  }
-  function cleanLabel(s) {
-    return String(s).replace(/^\s*\[/, '').replace(/\]\s*$/, '').replace(/^["']|["']$/g, '').replace(/''/g, "'");
-  }
-
-  function openConfirmModal(iso, slot) {
-    // Re-grab the current button node from the DOM
-    confirmBtn = document.getElementById('confirmBtn');
-
-    // If the colleague hasn't connected their calendar, disable booking UI.
-    (function applyCalendarGate(){
-      const footer = confirmModal.querySelector('footer');
-      footer.querySelector('.no-cal-msg')?.remove();
-    
-      const inviteListEl = document.getElementById('inviteList');
-      const addInviteBtn = document.getElementById('addInviteBtn');
-      const newInviteInp = document.getElementById('newInviteInput');
-      const qWrap        = document.getElementById('confirmQuestionWrap');
-    
-      if (!state.calendarAccessOk) {
-        // Hide booking + inputs
-        confirmBtn.style.display = 'none';
-        inviteListEl.style.display = 'none';
-        addInviteBtn.style.display = 'none';
-        newInviteInp.style.display = 'none';
-        qWrap.style.display = 'none';
-    
-        // Clear any local emails and stop persistence
-        confirmDraft.candidates = [];
-        confirmDraft.selected.clear();
-        confirmDraft.dirty = false;
-    
-        const name = state?.meta?.colleagueFirstName || state?.meta?.colleagueEmail || 'your Culture Amp contact';
-        const contact = state?.meta?.colleagueEmail || '';
-        const mailto = contact
-          ? `mailto:${encodeURIComponent(contact)}?subject=Booking%20request&body=${encodeURIComponent('Hi – could we book the slot we discussed?')}`
-          : null;
-    
-        const msg = document.createElement('div');
-        msg.className = 'no-cal-msg notice';
-        msg.style.marginRight = 'auto';
-        msg.innerHTML = mailto
-          ? `Heads up: ${escapeHtml(name)} hasn’t connected their calendar yet, so we can’t book automatically here. Please <a href="${mailto}">reach out by email</a> to request this slot.`
-          : `Heads up: ${escapeHtml(name)} hasn’t connected their calendar yet, so we can’t book automatically here. Please reach out to them to request this slot.`;
-        footer.prepend(msg);
-      } else {
-        confirmBtn.style.display = '';
-        inviteListEl.style.display = '';
-        addInviteBtn.style.display = '';
-        newInviteInp.style.display = '';
-        qWrap.style.display = '';
-      }
-    })();
-
-
-    const inviteListEl = document.getElementById('inviteList');
-    const addInviteBtn = document.getElementById('addInviteBtn');
-    const newInviteInp = document.getElementById('newInviteInput');
-    const qWrap = document.getElementById('confirmQuestionWrap');
-    qWrap.innerHTML = '';
-    qWrap.classList.add('hide');
-
-    const norm = s => String(s || '').trim();
-    const lower = s => norm(s).toLowerCase();
-    const isEmail = s => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(norm(s));
-
-    const suggested = (state.suggestedInvitees || [])
-      .map(norm)
-      .filter(isEmail);
-    
-    const preselected = (state.preselectedCustomerEmails || [])
-      .map(norm)
-      .filter(isEmail);
-    
-    const suggestedLC   = new Set(suggested.map(lower));
-    const preselectedLC = new Set(preselected.map(lower));
-    
-    // Build candidate list + default selection, then seed the shared draft
-    confirmDraft.candidates = Array.from(new Set([...suggested, ...preselected]))
-      .map(e => ({
-        email: e,
-        _userAdded: false,
-        _preselected: preselectedLC.has(lower(e)),
-        _suggested:  suggestedLC.has(lower(e))
-      }));
-    
-    confirmDraft.selected = new Set(preselected.map(lower)); // only preselected are checked by default
-    confirmDraft.dirty = false;
-
-    function renderInviteList() {
-      inviteListEl.innerHTML = '';
-      const items = confirmDraft.candidates;
-    
-      if (!items.length) {
-        const p = document.createElement('p');
-        p.className = 'notice';
-        p.textContent = 'Add at least one attendee email to proceed.';
-        inviteListEl.appendChild(p);
-        validateConfirmEnabled();
-        return;
-      }
-    
-      items.forEach((c, idx) => {
-        const row = document.createElement('label');
-        row.style.display = 'flex';
-        row.style.alignItems = 'center';
-        row.style.gap = '8px';
-        row.style.margin = '6px 0';
-    
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = confirmDraft.selected.has(lower(c.email));
-        cb.addEventListener('change', () => {
-          const key = lower(c.email);
-          if (cb.checked) confirmDraft.selected.add(key);
-          else confirmDraft.selected.delete(key);
-          confirmDraft.dirty = true;
-          validateConfirmEnabled();
-        });
-    
-        const span = document.createElement('span');
-        span.textContent = c.email;
-    
-        const rm = document.createElement('button');
-        rm.type = 'button';
-        rm.textContent = 'Remove';
-        rm.className = 'link-btn';
-        rm.style.marginLeft = 'auto';
-        rm.addEventListener('click', () => {
-          confirmDraft.selected.delete(lower(c.email));
-          confirmDraft.candidates.splice(idx, 1);
-          confirmDraft.dirty = true;
-          renderInviteList();
-          validateConfirmEnabled();
-        });
-    
-        if (!c._userAdded) rm.style.display = 'none';
-    
-        row.append(cb, span, rm);
-        inviteListEl.appendChild(row);
-      });
-    }
-
-    function validateConfirmEnabled() {
-      const hasEmails = confirmDraft.selected.size > 0;
-      confirmBtn.disabled = !hasEmails;
-    }
-
-    function addNewInviteFromInput() {
-      const raw = norm(newInviteInp.value);
-      const lc = lower(raw);
-      if (!raw) return;
-      if (!isEmail(raw)) { alert('Please enter a valid email address.'); return; }
-      if (confirmDraft.candidates.some(c => lower(c.email) === lc)) { alert('That address is already listed.'); return; }
-    
-      confirmDraft.candidates.push({ email: raw, _userAdded: true });
-      if (confirmDraft.candidates.length > 15) {
-        confirmDraft.candidates = confirmDraft.candidates.slice(-15);
-      }
-      confirmDraft.selected.add(lc);
-      confirmDraft.dirty = true;
-    
-      newInviteInp.value = '';
-      renderInviteList();
-      validateConfirmEnabled();
-    }
-
-    const fmtDate = new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
-    const fmtTime = new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, hour: '2-digit', minute: '2-digit', hour12: false });
-    const dateStr = s => new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }).format(s);
-    const timeStr = (s, e) => new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(s).replace(':', 'h') + '–' + new Intl.DateTimeFormat('en-GB', { timeZone: state.tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(e).replace(':', 'h');
-
-    confirmWhen.textContent = ''; // set below when slot passed
-    renderInviteList();     
-    validateConfirmEnabled();
-    confirmWhen.textContent = `${dateStr(slot.start)} • ${timeStr(slot.start, slot.end)}`;
-
-    const confirmPrepEl = document.getElementById('confirmPrep');
-    confirmPrepEl.style.display = 'none';
-    confirmPrepEl.textContent = '';
-    
-    if (slot && slot.prep && slot.prep.start && slot.prep.end) {
-      const ps = slot.prep.start; // Date
-      const name =
-        state?.meta?.colleagueFirstName ||
-        state?.meta?.colleagueEmail ||
-        (colleagueNameEl && colleagueNameEl.textContent) ||
-        'they';
-    
-      const startTime = new Intl.DateTimeFormat('en-GB', {
-        timeZone: state.tz, hour: '2-digit', minute: '2-digit', hour12: false
-      }).format(ps).replace(':', 'h');
-    
-      confirmPrepEl.textContent =
-        `${name} would begin preparing for the call on ${dateStr(ps)} at ${startTime}.`;
-      confirmPrepEl.style.display = '';
-    }
-
-    addInviteBtn.onclick = () => {
-      newInviteInp.classList.toggle('hide');
-      if (!newInviteInp.classList.contains('hide')) newInviteInp.focus();
-    };
-    newInviteInp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addNewInviteFromInput(); } };
-    newInviteInp.onblur = () => { if (String(newInviteInp.value || '').trim()) addNewInviteFromInput(); };
-
-    confirmBtn.textContent = 'Confirm';
-    confirmBtn.classList.remove('success', 'error');
-
-    confirmModal.style.display = 'flex';
-    confirmBtn.onclick = async () => {
-      if (confirmDraft.selected.size === 0) {
-        alert('Please add at least one attendee email.');
-        return;
-      }
-    
-      confirmBtn.disabled = true;
-      confirmBtn.textContent = 'Booking…';
-    
-      // ⬇️ Show the modal NOW, then yield so it paints.
-      showLoading('Booking your time…');
-      await nextFrame(); // guarantees the spinner + message are visible
-    
-      // (Optional but nice) optimistic UI: stamp Step 1 + hide week immediately
-      if (!state.meta) state.meta = {};
-      refreshLandingCards();
-      document.querySelectorAll('#weekView .week-wrap, #landingInline .week-wrap')
-        .forEach(el => el.classList.add('hide'));
-    
-      // Save invitees, but don’t block the spinner on it
-      const { suggestedInvitees, preselectedCustomerEmails } = collectInviteesForSave();
-      saveInviteesOnce({ suggestedInvitees, preselectedCustomerEmails, reason: 'confirm' })
-        .catch(console.error);
-      confirmDraft.dirty = false;
-      state.suggestedInvitees = suggestedInvitees.slice();
-      state.preselectedCustomerEmails = preselectedCustomerEmails.slice();
-    
-      const explicitCustomerEmails = Array.from(confirmDraft.selected);
-      const preferredPrep =
-        (slot && slot.prep)
-          ? { start: slot.prep.start.toISOString(), end: slot.prep.end.toISOString() }
-          : undefined;
-      const extra = {
-        explicitCustomerEmails,
-        ...(preferredPrep ? { [iso]: preferredPrep } : {})
-      };
-    
-      try {
-        const resp = await runBlocking(
-          () => apiPost('reserveSlots', { token }, { slots: [iso], extra }),
-          { startMsg: 'Booking the session...', slowMsg: 'Booking prep time...', slowAfterMs: 3000, preShown: true }
-        );
-      
-        const c = resp?.confirmed?.[iso];
-      
-        if (c) {
-          // keep local “meta” in sync so Step 1 card renders from real data
-          state.meta.bookedStartISO = c.start;
-          state.meta.bookedEndISO   = c.end || (slot ? slot.end.toISOString() : '');
-          state.meta.selectedStartsJSON = [c.start];
-          state.meta.status = 'USED';
-      
-          // hydrate the slot used by Step 2 subtitle
-          slot.start = new Date(c.start);
-          slot.end   = new Date(c.end || slot.end?.toISOString() || c.start);
-      
-          if (c.prep?.start && c.prep?.end) {
-            slot.prep = {
-              start: new Date(c.prep.start),
-              end:   new Date(c.prep.end)
-            };
-          }
-        }
-      
-        // Update Step 1 card with real data
-        refreshLandingCards();
-      
-        // Success UI + Step 2 render
-        confirmBtn.classList.add('success');
-        confirmBtn.textContent = 'Booked!';
-        renderStep2FromSlot(slot);
-      
-        setTimeout(() => {
-          confirmModal.style.display = 'none';
-          pendingIso = null; pendingPill = null;
-        }, 900);
-    
-      } catch (err) {
-        // (optional) revert the optimistic Step 1 if you want
-        // e.g., delete state.meta.bookedStartISO; refreshLandingCards();
-    
-        confirmBtn.classList.add('error');
-        confirmBtn.textContent = 'Try again';
-        alert(err && err.message ? err.message : String(err));
-        confirmBtn.disabled = false;
-      }
-    };
-  }
-
-  function closeConfirmModal(revertIfAny = true) {
-    confirmModal.style.display = 'none';
-    if (revertIfAny && pendingPill) {
-      pendingPill.classList.remove('selected');
-      const icon = pendingPill.querySelector('.icon'); if (icon) icon.textContent = '○';
-    }
-    pendingIso = null; pendingPill = null;
-  }
-  
-  // Close (X) button: save if dirty, then close
-  closeConfirm.onclick = async () => {
-    if (confirmDraft.dirty) {
-      const { suggestedInvitees, preselectedCustomerEmails } = collectInviteesForSave();
-      await saveInviteesOnce({ suggestedInvitees, preselectedCustomerEmails, reason: 'close' });
-      confirmDraft.dirty = false;
-    }
-    closeConfirmModal(true);
-  };
-
-function renderStep2FromSlot(slot) {
-  // 🔧 Clear the Step 2 content before re-rendering to avoid duplicates
-  const s2Q = document.getElementById('s2Questions');
-  if (s2Q) s2Q.innerHTML = '';
-
-  // (optional, if you sometimes re-write the banner)
-  const s2Sub = document.getElementById('s2Sub');
-  if (s2Sub) {
-    // leave styling alone; we'll just let later code rewrite its inner HTML
-  }
-
-  state.lastBooked = slot ? { start: slot.start, end: slot.end } : null;
-  state.lastPrep   = (slot && slot.prep) ? { start: slot.prep.start, end: slot.prep.end } : null;
-  state.stage = 'postBook';
-
-  document.getElementById('overviewView')?.classList.add('hide');
-  document.getElementById('weekView')?.classList.add('hide');
-  document.getElementById('step2')?.classList.remove('hide');
-
-  const s2Colleague = document.getElementById('s2Colleague');
-  const s2SubEl     = document.getElementById('s2Sub');
-
-  const colleagueName =
-    state?.meta?.colleagueFirstName ||
-    state?.meta?.colleagueEmail ||
-    'your Culture Amp contact';
-
-  if (s2Colleague) s2Colleague.textContent = colleagueName;
-
-  // (existing banner + questions + agenda)
-  renderPrepBanner(slot);
-  renderStep2Questions(slot);
-  renderAgenda(slot);
-
-  const saveBtn = document.getElementById('s2SaveBtn');
-  if (saveBtn) saveBtn.onclick = () => saveSnapshot();
-  updateSaveUI();
-}
-
-function renderStep2Questions(slot) {
-  const mount = document.getElementById('s2QMount') || document.getElementById('s2Questions');
-  mount.innerHTML = '';
-
-  const qs = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length
-    ? state.confirmQuestions
-    : (state.confirmQuestion ? [state.confirmQuestion] : []);
-
-  if (!qs.length) { updateSaveUI(); return; }
-
-  ensureStateShape();
-
-  // ✅ Provide values for interpolation
-  const ctx = {
-    colleagueFirstName:
-      state?.meta?.colleagueFirstName
-      || (state?.meta?.colleagueEmail ? state.meta.colleagueEmail.split('@')[0].split(/[._]/)[0] : '')
-      || 'your People Scientist',
-    customerName:  state?.meta?.customerName || state?.meta?.accountName || '',
-    meetingType:   state?.meta?.meetingType  || '',
-  };
-
-  qs.forEach((cq, idx) => {
-    const key   = String(cq?.key || (`q${idx}`));
-    let rawType =
-      cq?.type ??
-      cq?.questionType ??
-      cq?.input ??
-      (cq?.multi === true ? 'multi' : 'single');
-    
-    let type = String(rawType).trim().toLowerCase();
-    if (type === 'checkbox' || type === 'checkboxes') type = 'multi';
-    if (type === 'textarea') type = 'text';
-    const label = interp(cq?.label || 'Question', ctx) + (cq?.required ? ' *' : '');
-
-    const block = document.createElement('div');
-    block.style.margin = '12px 0';
-
-    const title = document.createElement('div');
-    title.className = 'cq-title';
-    title.textContent = label;
-    block.appendChild(title);
-
-    if (type === 'text') {
-      // TEXT
-      const saved = (getAnswer(key) ?? cq?.saved ?? '');
-      const multiline = !!cq?.multiline;
-      const maxLength = Number(cq?.maxLength || 0) || undefined;
-
-      let input;
-      if (multiline) {
-        input = document.createElement('textarea');
-        input.rows = 2;
-      } else {
-        input = document.createElement('input');
-        input.type = 'text';
-      }
-      input.className = 's2-input';
-      input.placeholder = interp(cq?.placeholder || '', ctx);
-      if (maxLength) input.maxLength = maxLength;
-      input.value = String(saved || '');
-
-      input.addEventListener('input', debounce(() => {
-        setAnswer(key, String(input.value || '').trim());
-      }, 200));
-
-      block.appendChild(input);
-
-    } else if (type === 'multi') {
-      // MULTI (checkboxes)
-      const opts = parseOptionsLoose(cq?.options).map(cleanLabel);
-      let saved = getAnswer(key);
-      if (!Array.isArray(saved)) saved = saved == null ? [] : toArray(saved);
-      const savedSet = new Set(saved.map(String));
-
-      const maxSel = Number(cq?.maxSelections || 0) || Infinity;
-
-      opts.forEach(optRaw => {
-        const rendered = interp(cleanLabel(optRaw), ctx);
-        const id = `s2_${key}_${rendered.replace(/\W+/g,'_')}`;
-
-        const row = document.createElement('div');
-        row.className = 'cq-row';
-
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.id = id;
-        cb.checked = savedSet.has(rendered);
-
-        cb.addEventListener('change', () => {
-          // enforce maxSelections
-          const current = new Set(getAnswer(key) || []);
-          if (cb.checked) {
-            if (current.size >= maxSel) {
-              cb.checked = false;
-              alert(`You can select up to ${maxSel}.`);
-              return;
-            }
-            current.add(rendered);
-          } else {
-            current.delete(rendered);
-          }
-          setAnswer(key, Array.from(current));
-        });
-
-        const lab = document.createElement('label');
-        lab.setAttribute('for', id);
-        lab.textContent = rendered;
-
-        row.append(cb, lab);
-        block.appendChild(row);
-      });
-
-    } else {
-      // SINGLE (radio) – your existing behavior
-      const opts = parseOptionsLoose(cq?.options).map(cleanLabel);
-      const saved = getAnswer(key) ?? (cq?.saved != null ? cleanLabel(cq.saved) : null);
-
-      opts.forEach(optRaw => {
-        const rendered = interp(cleanLabel(optRaw), ctx);
-        const id = `s2_${key}_${rendered.replace(/\W+/g,'_')}`;
-
-        const row = document.createElement('div');
-        row.className = 'cq-row';
-
-        const rb = document.createElement('input');
-        rb.type = 'radio';
-        rb.name = `s2_${key}`;
-        rb.id   = id;
-        rb.value = rendered;
-        if (saved && String(saved) === rendered) rb.checked = true;
-
-        rb.addEventListener('change', () => setAnswer(key, rendered));
-
-        const lab = document.createElement('label');
-        lab.setAttribute('for', id);
-        lab.textContent = rendered;
-
-        row.append(rb, lab);
-        block.appendChild(row);
-      });
-    }
-
-    mount.appendChild(block);
-  });
-
-  updateSaveUI();
-}
-
-
-function renderAgenda(){
-  ensureStateShape();
-
-  const container = document.createElement('div');
-  container.className = 'agenda-wrap';
-  container.style.marginTop = '16px';
-  container.style.maxWidth = '660px';
-
-  const title = document.createElement('div');
-  title.className = 'agenda-title';
-  title.textContent = 'Agenda: Add your questions to help shape the agenda below';
-  container.appendChild(title);
-
-  const list = document.createElement('div');
-  list.id = 'agendaList';
-  list.className = 'agenda-list';
-  container.appendChild(list);
-
-  const addRow = document.createElement('div');
-  addRow.className = 'agenda-input-row';
-
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.placeholder = 'Add an agenda item…';
-
-  const addBtn = document.createElement('button');
-  addBtn.className = 'btn';
-  addBtn.textContent = 'Add';
-
-  addRow.append(input, addBtn);
-  container.appendChild(addRow);
-
-  const mount = document.getElementById('s2Questions');
-  mount.appendChild(container);
-
-  const editing = new Set();
-  const items = () =>
-    (state.stateJSON.agenda.items || []).slice().sort((a,b)=>(a.order??0)-(b.order??0));
-
-  function paint(){
-    list.innerHTML = '';
-    const arr = items();
-
-    // no “No agenda items yet.” message; just show the input row above
-    arr.forEach((it, idx) => {
-      const row = document.createElement('div');
-      row.className = 'sel-item';
-      row.style.justifyContent = 'space-between';
-
-      const left = document.createElement('div');
-      left.style.display = 'flex';
-      left.style.alignItems = 'center';
-      left.style.gap = '8px';
-      left.style.flex = '1 1 auto';
-
-      const actions = document.createElement('div');
-      actions.style.display = 'flex';
-      actions.style.gap = '6px';
-      actions.style.flexShrink = '0';
-
-      const bullet = document.createElement('span');
-      bullet.textContent = '•';
-      left.appendChild(bullet);
-
-      if (editing.has(it.id)){
-        const inp = document.createElement('input');
-        inp.type = 'text';
-        inp.value = it.text;
-        inp.style.flex = '1 1 auto';
-        left.appendChild(inp);
-
-        const save = document.createElement('button');
-        save.className = 'link-btn';
-        save.textContent = 'Save';
-        save.onclick = () => {
-          const t = String(inp.value||'').trim();
-          editing.delete(it.id);
-          if (t && t !== it.text){
-            it.text = t;
-            agendaDirty = true;
-            markDirty();
-          }
-          paint();
-        };
-
-        const cancel = document.createElement('button');
-        cancel.className = 'link-btn';
-        cancel.textContent = 'Cancel';
-        cancel.onclick = () => { editing.delete(it.id); paint(); };
-
-        const del = document.createElement('button');
-        del.className = 'link-btn';
-        del.textContent = 'Remove';
-        del.onclick = () => {
-          const src = state.stateJSON.agenda.items;
-          const i = src.findIndex(x => x.id === it.id);
-          if (i >= 0) src.splice(i,1);
-          editing.delete(it.id);
-          renumberOrders();
-          agendaDirty = true;
-          markDirty();
-          paint();
-        };
-
-        actions.append(save, cancel, del);
-      } else {
-        const txt = document.createElement('div');
-        txt.textContent = it.text;
-        left.appendChild(txt);
-
-        const edit = document.createElement('button');
-        edit.className = 'link-btn';
-        edit.textContent = 'Edit';
-        edit.onclick = () => { editing.add(it.id); paint(); };
-
-        const up = document.createElement('button');
-        up.className = 'link-btn';
-        up.textContent = '↑';
-        up.onclick = () => {
-          const arr = items();
-          if (idx === 0) return;
-          const a = arr[idx], b = arr[idx-1];
-          const tmp = a.order; a.order = b.order; b.order = tmp;
-          renumberOrders();
-          agendaDirty = true;
-          markDirty();
-          paint();
-        };
-
-        const down = document.createElement('button');
-        down.className = 'link-btn';
-        down.textContent = '↓';
-        down.onclick = () => {
-          const arr = items();
-          if (idx >= arr.length - 1) return;
-          const a = arr[idx], b = arr[idx+1];
-          const tmp = a.order; a.order = b.order; b.order = tmp;
-          renumberOrders();
-          agendaDirty = true;
-          markDirty();
-          paint();
-        };
-
-        if (idx === 0) {
-          up.disabled = true;
-          up.style.visibility = 'hidden';
-        }
-        if (idx === items().length - 1) {
-          down.disabled = true;
-          down.style.visibility = 'hidden';
-        }
-
-        const del = document.createElement('button');
-        del.className = 'link-btn';
-        del.textContent = 'Remove';
-        del.onclick = () => {
-          const src = state.stateJSON.agenda.items;
-          const i = src.findIndex(x => x.id === it.id);
-          if (i >= 0) src.splice(i,1);
-          renumberOrders();
-          agendaDirty = true;
-          markDirty();
-          paint();
-        };
-
-        actions.append(edit, up, down, del);
-      }
-
-      row.append(left, actions);
-      list.appendChild(row);
-    });
-  }
-
-  function nextOrder(){ return Math.max(0, ...state.stateJSON.agenda.items.map(x => Number(x.order||0))) + 1; }
-  function renumberOrders(){
-    state.stateJSON.agenda.items
-      .sort((a,b)=>(a.order??0)-(b.order??0))
-      .forEach((it, i) => it.order = i+1);
-  }
-
-  // Add new
-  addBtn.onclick = () => {
-    const text = String(input.value || '').trim();
-    if (!text) return;
-    input.value = '';
-    const id = genId();
-    state.stateJSON.agenda.items.push({ id, text, order: nextOrder() });
-    agendaDirty = true;
-    markDirty();
-    paint();
-  };
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter'){ e.preventDefault(); addBtn.click(); }
-  });
-
-  paint();
-}
-
-  async function fetchWeekAtGranularity(mondayKey, g) {
-    const res = await apiGet('fetchWeek', { token, mondayKey, g });
-    console.log('[fetchWeek raw]', res);
-    // show an example of a slot with prep (if present)
-    const withPrep = (res?.slots || []).find(s => s.prep);
-    if (withPrep) console.log('[example prep]', withPrep.prep);
-    const parsed = parseSlots(res && res.slots ? res.slots : []);
-    console.log('[fetchWeek parsed first]', parsed[0]);
-    return { parsed, count: parsed.length, g };
-  }
-
-  
-  async function loadWeekCoarseToFine(mondayKey, { prefetch=false } = {}) {
-    // UI cue (only when visible)
-    if (!prefetch) showLoading('Scanning for availability…');
-  
-    // 60-min pass
-    let all = await fetchWeekAtGranularity(mondayKey, 60);
-    if (!prefetch && all.count < 3) { showLoading('Looking for prep slots…'); }
-    // 30-min pass (only if needed)
-    if (all.count < 3) {
-      const next = await fetchWeekAtGranularity(mondayKey, 30);
-      all = { parsed: [...all.parsed, ...next.parsed].sort((a,b)=>a.start-b.start), count: all.count + next.count };
-    }
-    // 15-min pass (only if still needed)
-    if (all.count < 3) {
-      if (!prefetch) showLoading('Taking a closer look…');
-      const next = await fetchWeekAtGranularity(mondayKey, 15);
-      all = { parsed: [...all.parsed, ...next.parsed].sort((a,b)=>a.start-b.start), count: all.count + next.count };
-    }
-  
-    const payload = { slotsParsed: all.parsed, exactCount: all.count };
-    state.weekCache.set(mondayKey, payload);
-    return payload;
-  }
-
-
-  /**********************
-   * Events & wiring
-   **********************/
-
-  prevWeekBtn.onclick = () => {
-    if (!state.currentWeek) return;
-    const wk = plusDaysKey(state.currentWeek, -7);
-    openWeek(wk);
-  };
-  nextWeekBtn.onclick = () => {
-    if (!state.currentWeek) return;
-    const wk = plusDaysKey(state.currentWeek, 7);
-    openWeek(wk);
-  };
-
-  /**********************
-   * Boot
-   **********************/
-  function init() {
-    const t = token;
-    if (!t) { alert('Missing token in URL (?token=...)'); return; }
-  
-    showLoading('Loading meeting details…');
-  
-    apiGet('getInviteMeta', { token: t })
-      .then(meta => {
-        if (!meta?.ok) throw new Error(meta?.error || 'Meta fetch failed');
-  
-        state.meta = meta;
-        state.calendarAccessOk = detectCalendarAccess(meta);
-        // Inspect exactly what we got
-        console.table({
-          ca_ok: meta?.calendarAccess?.ok,
-          ca_status: meta?.calendarAccess?.status,
-          ca_validatedAt: meta?.calendarAccess?.validatedAt,
-          decision: state.calendarAccessOk
-        });
-        
-        // Coerce/parse meta.stateJSON from the API
-        let sj = meta.stateJSON;
-        if (sj && typeof sj === 'string') {
-          try { sj = JSON.parse(sj); } catch { sj = null; }
-        }
-        if (!sj || typeof sj !== 'object') {
-          sj = { version: 1, lastEditedAtISO: new Date().toISOString(), prep: { answers: {} }, agenda: { items: [] } };
-        }
-        state.stateJSON = sj;
-        
-        console.log('stateJSON (parsed):', state.stateJSON);
-  
-        // Names in header/step 2/landing
-        const displayName = meta.colleagueFirstName || meta.colleagueEmail || '';
-        const meetingType = meta.meetingType || 'Book a session';
-        const customerName = meta.customerName || meta.accountName || '';
-        state.meta.customerName = customerName;                             
-        
-        // Notice/header name
-        if (colleagueNameEl) colleagueNameEl.textContent = displayName;
-        
-        // Step 2 header name
-        const s2ColleagueEl = document.getElementById('s2Colleague');
-        if (s2ColleagueEl) s2ColleagueEl.textContent = displayName;
-        
-        // Landing title (two lines):
-        // "<Customer Name> & Culture Amp"
-        // "<Meeting Type> with <Colleague First Name>"
-        const landingTitleEl = document.querySelector('#landingView .week-title');
-        if (landingTitleEl) {
-          landingTitleEl.innerHTML =
-            `<div style="font-weight:800">${escapeHtml(customerName)} &amp; Culture Amp</div>
-             <div>${escapeHtml(meetingType)} with <span id="landingColleague"></span></div>`;
-          const landingColleagueEl = document.getElementById('landingColleague');
-          if (landingColleagueEl) landingColleagueEl.textContent = displayName;
-        }
-  
-        // Show LANDING immediately (instead of Overview)
-        showOnly('landing');
-        refreshLandingCards();
-
-        if (typeof setBreadcrumbForLanding === 'function') setBreadcrumbForLanding();
-  
-        // Preload invitees
-        if (Array.isArray(meta.suggestedInvitees)) {
-          state.suggestedInvitees = meta.suggestedInvitees;
-        }
-        if (Array.isArray(meta.preselectedCustomerEmails)) {
-          state.preselectedCustomerEmails = meta.preselectedCustomerEmails;
-        }
-  
-        // Confirm questions (we’ll use them in Step 2)
-        if (meta.confirmQuestions || meta.confirmQuestionsJSON) {
-          state.confirmQuestions = coerceCqs(meta.confirmQuestions || meta.confirmQuestionsJSON);
-        }
-        if (!state.confirmQuestions.length && meta.confirmQuestion) {
-          state.confirmQuestions = [meta.confirmQuestion]; // legacy single-question support
-        }
-  
-        if (meta.initialTz) initialTz = meta.initialTz;
-        if (typeof meta.maxHolds === 'number') MAX_SELECT = meta.maxHolds;
-  
-        if (meta.status !== 'NEW' && !meta.allowRebook) {
-          hideLoading();
-          refreshLandingCards({ metaOverride: meta });
-          showOnly('landing');
-    
-          // Make the app visible
-          const app = document.getElementById('app');
-          if (app) {
-            app.removeAttribute('inert');
-            app.removeAttribute('aria-hidden');
-          }
-          document.documentElement.classList.remove('booting');
-    
-          return; // <-- Gracefully stop here instead of throwing an error
-        }
-
-        // Build weeks locally instead of fetching
-        const opts = {
-          initialTz: meta.initialTz || initialTz || 'UTC',
-          weeks: 24,
-          minNoticeDays: Number(meta?.options?.minNoticeDays ?? 0),
-          weekdaysCSV: String(meta?.options?.weekdaysCSV || 'Mon,Tue,Wed,Thu,Fri'),
-          blackoutDatesCSV: String(meta?.options?.blackoutDatesCSV || '')
-        };
-  
-        if (opts.initialTz) initialTz = opts.initialTz;
-        if (meta.timezones) timezones = normalizeTimezones(meta.timezones);
-      
-        const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-        state.tz = localStorage.getItem(TZ_STORE_KEY)
-               || meta.initialTz
-               || browserTz;
-
-        // After meta processed + local weeks built:
-        hideLoading();
-        const app = document.getElementById('app');
-        if (app) {
-          app.removeAttribute('inert');
-          app.removeAttribute('aria-hidden');
-        }
-        document.documentElement.classList.remove('booting');
-
-        if (typeof meta.maxHolds === 'number') MAX_SELECT = meta.maxHolds;
-    
-        if (Array.isArray(meta.suggestedInvitees)) state.suggestedInvitees = meta.suggestedInvitees;
-        if (Array.isArray(meta.preselectedCustomerEmails)) state.preselectedCustomerEmails = meta.preselectedCustomerEmails;
-    
-        if (!state.confirmQuestions.length) {
-          if (meta.confirmQuestions || meta.confirmQuestionsJSON) {
-            state.confirmQuestions = coerceCqs(meta.confirmQuestions || meta.confirmQuestionsJSON);
-          } else if (meta.confirmQuestion) {
-            state.confirmQuestions = [meta.confirmQuestion];
-          }
-        }
-    
-        // Show the full *current* quarter (past weeks will be present but disabled)
-        const localWeeks = generateWeeksForCurrentQuarter({
-          initialTz: opts.initialTz || 'UTC',
-          minNoticeDays: opts.minNoticeDays,
-          weekdaysCSV:  opts.weekdaysCSV,
-          blackoutDatesCSV: opts.blackoutDatesCSV
-        });
-        
-        state.monthWeeks = buildMonthWeeksFromWeekList(localWeeks);
-
-      })
-      .catch(err => {
-        if (String(err?.message) !== 'used_link') {
-          alert((err && err.message) || 'Failed to initialize.');
-        }
-      });
-  }
-
-  function refreshLandingCards({ metaOverride } = {}) {
-    const s1 = document.getElementById('step1Card');
-    const s2 = document.getElementById('step2Card');
-    if (!s1 || !s2) return;
-  
-    const meta = metaOverride || state.meta || {};
-    const flow = computeFlow(meta);
-  
-    const tz = state.tz || meta.initialTz || 'UTC';
-    const sel = getPrimarySelectedStart(meta); // Date | null
-    const dur = Number(meta.durationMins || 30);
-    const end = meta.bookedEndISO ? new Date(meta.bookedEndISO)
-              : (sel ? new Date(sel.getTime() + dur*60000) : null);
-
-  
-    const whenDate = sel ? fmtDateLocal(sel, tz) : '';
-    const whenTime = (sel && end) ? fmtRangeLocal(sel, end, tz) : '';
-  
-    const colleagueFirst = meta.colleagueFirstName || 'your People Scientist';
-  
-    if (flow === 'NEW') {
-      setStepCard(s1, {
-        state: 'active',
-        title: 'Step 1',
-        body: 'Pick a time that works for you.',
-        onClick: () => showInlineOverview()
-      });
-      setStepCard(s2, {
-        state: 'inactive',
-        title: 'Step 2',
-        body: `Share some details so ${colleagueFirst} can prepare.`
-      });
-      return;
-    }
-  
-    if (flow === 'USED_FUTURE') {
-      setStepCard(s1, {
-        state: 'locked',
-        title: '✅ Booked',
-        body: `${whenDate} • ${whenTime}`,
-        showRebook: !!meta.allowRebook,
-        extraClass: 'booked'
-      });
-    
-      // Build a slot object once from meta
-      const prepFromMeta =
-        (state.meta?.bookedPrepStartISO && state.meta?.bookedPrepEndISO)
-          ? { start: new Date(state.meta.bookedPrepStartISO),
-              end:   new Date(state.meta.bookedPrepEndISO) }
-          : null;
-    
-      const slot = sel ? {
-        start: sel,
-        end: end,
-        ...(prepFromMeta ? { prep: prepFromMeta } : {})
-      } : null;
-    
-      // Auto-render Step 2 now
-      if (slot) renderStep2FromSlot(slot);
-    
-      // Render the Step 2 card but make it a no-op on click
-      setStepCard(s2, {
-        state: 'active',
-        title: 'Step 2',
-        body: `Share some details below, so ${colleagueFirst} can prepare.`,
-        onClick: undefined   // ← button visually active, but does nothing
-      });
-    
-      return;
-    }
-  
-    // USED_PAST
-    setStepCard(s1, {
-      state: 'locked',
-      title: 'Meeting date passed',
-      body: `${whenDate} • ${whenTime}`,
-      extraClass: 'booked'
-    });
-    setStepCard(s2, {
-      state: 'inactive',
-      title: 'Step 2',
-      body: 'The meeting booked with this link is in the past'
-    });
-    document.getElementById('step2')?.classList.add('hide');
-  }
-
-  function interp(str, ctx={}) {
-    if (str == null) return '';
-    return String(str).replace(/\$\{(\w+)\}/g, (_, k) =>
-      (ctx[k] !== undefined && ctx[k] !== null) ? String(ctx[k]) : ''
-    );
-  }
-
+  // options helpers
   function parseAllowedWeekdays(csv='Mon,Tue,Wed,Thu,Fri'){
     const map = {Sun:7, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6};
     return new Set(csv.split(',').map(s=>map[String(s).trim().slice(0,3)]).filter(Boolean));
   }
-  function dayOfWeekFromKey(dayKey){ // Mon=1 ... Sun=7 (UTC)
-    const js = new Date(dayKey + 'T00:00:00Z').getUTCDay(); // Sun=0..Sat=6
-    return js === 0 ? 7 : js;
+  function dayOfWeekFromKey(dayKey){ const js = new Date(dayKey+'T00:00:00Z').getUTCDay(); return js===0?7:js; }
+  function buildMonthWeeks(weeks){
+    const monthWeeks = new Map();
+    (weeks||[]).forEach(w=>{ const ym = String(w.startISO).slice(0,7); if(!monthWeeks.has(ym)) monthWeeks.set(ym, []); monthWeeks.get(ym).push(w); });
+    for(const arr of monthWeeks.values()) arr.sort((a,b)=>a.startISO.localeCompare(b.startISO));
+    return monthWeeks;
   }
+  function monthTitle(y, m){ return new Date(Date.UTC(y, m-1, 1)).toLocaleString('en-GB', { month:'long', year:'numeric' }); }
   
-  function generateWeeksLocally({
+  // simple copy interpolation for titles
+  function fill(str){
+    const who         = state.meta?.colleagueFirstName || state.meta?.colleagueEmail || 'your contact';
+    const customer    = state.meta?.customerName || state.meta?.accountName || '';
+    const meetingType = state.meta?.meetingType || '';
+    return String(str || '')
+      .replace(/\$who\b/g, who)
+      .replace(/\$customer\b/g, customer)
+      .replace(/\$meetingType\b/g, meetingType);
+  }
+
+  function fmtMMMdd(d, tz){ return new Intl.DateTimeFormat('en-US',{ timeZone:tz, month:'short', day:'numeric' }).format(d); }
+  function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
+  function daysUntil(d){
+    const n = Math.ceil((startOfDay(d) - startOfDay(new Date())) / 86400000);
+    return n; // 0=today, 1=tomorrow, 2=in 2 days, etc.
+  }
+
+  // Build the token context for titles
+  function buildTemplateCtx(cfg){
+    const who = state.meta?.colleagueFirstName || state.meta?.colleagueEmail || 'your contact';
+    const mt  = state.meta?.meetingType || 'session';
+    const tz  = state.tz;
+
+    const evStart   = cfg.selectedStart || null;
+    const prepStart = state.meta?.bookedPrepStartISO ? new Date(state.meta.bookedPrepStartISO) : null;
+    const durMs     = (state.meta?.durationMins || 30) * 60000;
+
+    return {
+      who,
+      meetingtype: mt,
+      days: evStart ? daysUntil(evStart) : '',
+      ev_date: evStart ? fmtMMMdd(evStart, tz) : '',
+      ev_date_long: evStart ? fmtDate(evStart, tz) : '',
+      ev_time: evStart ? fmtRange(evStart, new Date(evStart.getTime()+durMs), tz) : '',
+      prep_date: prepStart ? fmtMMMdd(prepStart, tz) : '',
+      prep_date_long: prepStart ? fmtDate(prepStart, tz) : ''
+    };
+  }
+
+  // Replace tokens like $who, $days, $prep_date in a string
+  function fill(str, ctx){
+    return String(str||'').replace(/\$(who|meetingtype|days|ev_date|ev_date_long|ev_time|prep_date|prep_date_long)\b/g,
+      (_,k)=> (ctx?.[k] ?? '')
+    );
+  }
+
+  function detectCalendarAccess(meta) {
+    const ca = meta?.calendarAccess;
+    if (!ca) return false;
+    if (ca.ok === true)  return true;
+    if (ca.ok === false) return false;
+
+    const s = (ca.status || '').toUpperCase();
+    if (s === 'OK') return true;
+    if (['NEEDS_AUTH','EXPIRED','MISSING_SCOPE','NO_ACCESS'].includes(s)) return false;
+
+    return false; // unknown -> treat as not bookable
+  }
+
+  /* =====================
+   * META / INIT
+   * ===================== */
+  async function init(){
+    if(!token){ alert('Missing token in URL (?token=...)'); return; }
+    showLoading('Loading meeting details…');
+    try{
+      const meta = await apiGet('getInviteMeta', { token });
+      state.meta = meta; // keep raw for now
+      state.calendarAccessOk = detectCalendarAccess(meta);
+
+      // parse stateJSON
+      let sj = meta.stateJSON; if(typeof sj==='string'){ try{ sj=JSON.parse(sj);}catch{ sj=null; } }
+      state.stateJSON = sj && typeof sj==='object' ? sj : { version:1, lastEditedAtISO:null, prep:{answers:{}}, agenda:{items:[]} };
+
+      // questions
+      const cq = meta.confirmQuestions || meta.confirmQuestionsJSON || meta.confirmQuestion || [];
+      state.confirmQuestions = Array.isArray(cq) ? cq : (cq ? [cq] : []);
+
+      // invitees
+      if(Array.isArray(meta.suggestedInvitees)) state.suggestedInvitees = meta.suggestedInvitees;
+      if(Array.isArray(meta.preselectedCustomerEmails)) state.preselectedCustomerEmails = meta.preselectedCustomerEmails;
+
+      // header copy
+      const customer = meta.customerName || meta.accountName || '';
+      const who = meta.colleagueFirstName || meta.colleagueEmail || '';
+      const mt = meta.meetingType || 'Design session';
+      $('#eyebrow').textContent = `${customer ? customer+' & ' : ''}Culture Amp`;
+      $('#title').innerHTML = `${mt} with <span>${who}</span>`;
+      $('#smallNotice').textContent = `Pick a week and we’ll search ${who || 'your contact'}’s calendar — including time for preparation when required.`;
+
+      // weeks: locally generate the current quarter (past disabled)
+      materializeInitialMonths();
+
+      renderTimeline();
+      hideLoading();
+    }catch(e){ hideLoading(); alert((e && e.message) || 'Failed to load.'); }
+  }
+
+  /* =====================
+   * TIMELINE RENDERING
+   * ===================== */
+  function derive(){
+    const m = state.meta || {};
+
+    const hasQs   = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length > 0;
+    const hasPrep = Number(m?.options?.prepDurationMins || 0) > 0;
+
+    const sel   = getPrimarySelectedStart(m);
+    const now   = new Date();
+    const booked = !!sel;
+    const future = booked && sel > now;
+
+    const answers = (state.stateJSON?.prep?.answers) || {};
+    const allAnswered = hasQs
+      ? state.confirmQuestions.every((q,i)=>{
+          const k = String(q?.key || ('q'+i));
+          const v = answers[k];
+          return !(v == null || (Array.isArray(v) ? v.length === 0 : String(v).trim() === ''));
+        })
+      : true;
+
+    const prepStartISO = m?.bookedPrepStartISO || null;
+    const prepEndISO   = m?.bookedPrepEndISO   || null;
+
+    const prepStarted = !!prepStartISO && now >= new Date(prepStartISO);
+    const prepEnded   = !!prepEndISO   && now >= new Date(prepEndISO);
+
+    return {
+      hasQs, hasPrep, booked, future,
+      selectedStart: sel, allAnswered,
+      prepStarted, prepEnded
+    };
+  }
+
+
+  function renderTimeline(){
+    const t = $('#timeline'); if(!t) return; t.innerHTML = '';
+    const cfg = derive();
+    const tpl = buildTemplateCtx(cfg);
+    const S = (s, extra) => fill(s, { ...tpl, ...(extra||{}) });
+
+
+    const steps = [];
+
+    // STEP 1 — Find a time
+    const step1 = document.createElement('div'); step1.className='t-step';
+    step1.innerHTML = `<div class="t-dot ${cfg.booked? 'done' : 'active'}"></div>
+      <div class="t-body">
+        <div class="t-title">${
+          cfg.booked
+            ? S('Meeting on $ev_date ($days days from now)')
+            : S('Find a time to meet with $who')
+        }</div>
+        <div class="t-sub" id="s1Sub">${cfg.booked ? whenLine(cfg.selectedStart) : 'Choose a week to see available times.'}</div>
+        <div class="t-cta" id="s1Cta"></div>
+      </div>`;
+    steps.push(step1);
+
+    // INLINE ROW (hidden until "View availability" is clicked)
+    if(!cfg.booked){
+      const inlineRow = document.createElement('div');
+      inlineRow.className = 't-inline hide';
+      inlineRow.id = 'landingRow';
+      inlineRow.innerHTML = `
+        <div class="t-spacer"></div>
+        <div class="t-inline-body">
+          <div class="ov-bar">
+            <button type="button" class="ov-nav" id="ovPrev" aria-label="Previous months">‹</button>
+            <div id="landingInline"></div>
+            <button type="button" class="ov-nav" id="ovNext" aria-label="Next months">›</button>
+          </div>
+        </div>`;
+      steps.push(inlineRow);
+    }
+
+    // STEP 2 — Prep Qs (only if hasQs)
+    if(cfg.hasQs){
+      const step2 = document.createElement('div'); step2.className='t-step';
+      const dotClass = cfg.booked && cfg.allAnswered ? 'done' : (cfg.booked ? 'active' : '');
+      step2.innerHTML = `<div class="t-dot ${dotClass}"></div>
+        <div class="t-body">
+          <div class="t-title">${
+            cfg.booked
+              ? S('Provide some extra input before $prep_date to help $who prepare')
+              : S('Provide some extra input to help $who prepare')
+          }</div>
+          <div class="t-sub" id="s2Sub">${cfg.booked ? (cfg.allAnswered?'You can review your answers.':'Share input so we can prepare.') : 'Available after you book.'}</div>
+          <div class="t-cta" id="s2Cta"></div>
+        </div>`;
+      steps.push(step2);
+    }
+
+    // STEP 3 — Agenda (inline, after booking)
+    const step3 = document.createElement('div'); step3.className = 't-step align-top';
+    step3.innerHTML = `
+      <div class="t-dot ${cfg.booked ? (cfg.hasQs && !cfg.allAnswered ? '' : 'active') : ''}"></div>
+      <div class="t-body">
+        <div class="t-title">${S('Co-create the agenda, share your questions')}</div>
+        <div class="t-cta" id="s3Cta"></div>
+        <div class="t-sub" id="s3Sub">${cfg.booked ? 'Add items below.' : 'Available after you book.'}</div>
+        <div id="s3Mount" class="agenda-wrap"></div>
+      </div>`;
+    steps.push(step3);
+
+
+    // STEP 4 — Prep window (if required)
+    if (cfg.hasPrep) {
+      const step4 = document.createElement('div');
+      step4.className = 't-step';
+
+      const title = cfg.booked
+        ? S(`$prep_date: We've held time in $who's calendar to prepare`)
+        : 'We’ll hold time to prepare';
+
+      // dot: empty until prep start time, then done
+      const dotClass = cfg.prepStarted ? 'done' : '';
+
+      step4.innerHTML = `
+        <div class="t-dot ${dotClass}"></div>
+        <div class="t-body">
+          <div class="t-title">${title}</div>
+          <div class="t-sub" id="prepWindowLine">
+            ${cfg.booked ? prepWindowLine() : 'We’ll hold time once you’ve booked.'}
+          </div>
+        </div>`;
+      steps.push(step4);
+    }
+
+    // STEP 5 — Meet
+    const step5 = document.createElement('div'); step5.className='t-step';
+    step5.innerHTML = `<div class="t-dot"></div>
+      <div class="t-body">
+        <div class="t-title">${
+          cfg.booked
+            ? S('$ev_date — Confirmed $meetingtype set with $who')
+            : S('Meet to discuss!')
+        }</div>
+        <div class="t-sub" id="meetLine">${cfg.booked ? eventLine(cfg.selectedStart) : ''}</div>
+      </div>`;
+    steps.push(step5);
+
+
+    // mount all steps
+    steps.forEach(s=>t.appendChild(s));
+
+    // Wire CTAs
+    const s1Cta = $('#s1Cta');
+    if(!cfg.booked){
+      const btn = document.createElement('button'); btn.className='btn'; btn.textContent='View availability';
+      btn.onclick = () => {
+        const row = document.getElementById('landingRow');
+        if(row){ row.classList.remove('hide'); showInlineOverview(); row.scrollIntoView({behavior:'smooth', block:'nearest'}); }
+      };
+      s1Cta.appendChild(btn);
+    } else {
+      // after booking, remove any inline content
+      const li = $('#landingInline'); if(li) li.innerHTML = '';
+    }
+
+    if (cfg.hasQs){
+      const s2Cta = $('#s2Cta'); s2Cta.innerHTML='';
+      if (cfg.booked){
+        const btn = document.createElement('button');
+        const isDone = cfg.allAnswered;
+        btn.className = isDone ? 'btn ghost' : 'btn';   // 👈 ghost only for “Review input”
+        btn.textContent = isDone ? 'Review input' : 'Share input';
+        btn.onclick = openPrepModal;
+        s2Cta.appendChild(btn);
+      }
+    }
+
+    if (cfg.booked){
+      const s3Mount = $('#s3Mount');
+      const s3Cta   = $('#s3Cta');
+
+      // Show the toggle ONLY if there are no questions OR questions aren't complete.
+      const showAgendaToggle = (!cfg.hasQs) || (cfg.hasQs && !cfg.allAnswered);
+
+      // Visibility defaults:
+      // - force OPEN when questions are complete
+      // - else remember prior choice, or default open when no questions / closed when questions exist
+      if (cfg.hasQs && cfg.allAnswered) {
+        state.agendaVisible = true;            // force open when complete
+      } else if (typeof state.agendaVisible !== 'boolean') {
+        state.agendaVisible = !cfg.hasQs ? true : false;
+      }
+
+      function paintAgenda(){
+        s3Mount.innerHTML = '';
+        if (state.agendaVisible) renderAgendaInline();
+        paintAgendaBtn();
+      }
+
+      function paintAgendaBtn(){
+        s3Cta.innerHTML = '';
+        if (!showAgendaToggle) return;          // 👈 no button when complete
+        const btn = document.createElement('button');
+        btn.className = 'btn ghost';
+        btn.textContent = state.agendaVisible ? 'Hide Agenda' : 'Review Agenda';
+        btn.onclick = () => { state.agendaVisible = !state.agendaVisible; paintAgenda(); };
+        s3Cta.appendChild(btn);
+      }
+
+      paintAgenda();
+    }
+  }
+
+
+  function whenLine(start){
+    if(!start) return '';
+    const end = new Date((state.meta?.durationMins||30)*60000 + start.getTime());
+    return `${fmtDate(start, state.tz)} • ${fmtRange(start, end, state.tz)}`;
+  }
+  function eventLine(start){ return whenLine(start); }
+  function prepWindowLine(){
+    const s = state.meta?.bookedPrepStartISO ? new Date(state.meta.bookedPrepStartISO) : null;
+    if(!s) return 'We inserted a calendar hold to allow time to prepare.';
+    return `We inserted a calendar hold on ${fmtDate(s, state.tz)} at ${fmtTime(s, state.tz)} to prepare.`;
+  }
+
+  function getPrimarySelectedStart(meta){
+    let arr=[]; try{
+      if(Array.isArray(meta.selectedStartsJSON)) arr = meta.selectedStartsJSON;
+      else if(typeof meta.selectedStartsJSON==='string' && meta.selectedStartsJSON.trim()) arr = JSON.parse(meta.selectedStartsJSON);
+    }catch{}
+    const dates = (arr||[]).map(s=>new Date(s)).filter(d=>!isNaN(+d));
+    if(!dates.length && meta.bookedStartISO){ const d=new Date(meta.bookedStartISO); return isNaN(+d)?null:d; }
+    if(!dates.length) return null;
+    const now=new Date(); const future=dates.filter(d=>d>now).sort((a,b)=>a-b); if(future.length) return future[0]; return dates.sort((a,b)=>b-a)[0];
+  }
+
+  /* =====================
+   * INLINE OVERVIEW / WEEK
+   * ===================== */
+  function renderInlineOverviewShell(){
+    const mount = $('#landingInline'); if(!mount) return; mount.innerHTML = '';
+    const holder = document.createElement('div'); holder.id='inlineHolder'; mount.appendChild(holder);
+    showInlineOverview();
+  }
+
+  function showInlineOverview(){
+    const mount = $('#landingInline'); if(!mount) return; mount.innerHTML='';
+
+    // all months we have, sorted (e.g. 2025-09, 2025-10, …)
+    const monthsAll = [...state.monthWeeks.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+    const total     = monthsAll.length;
+    const visCount  = Math.max(1, Number(state.monthPager?.visible || 3));
+
+    // clamp offset
+    const maxOffset = Math.max(0, total - visCount);
+    const start     = Math.min(Math.max(0, Number(state.monthPager?.offset || 0)), maxOffset);
+
+    // slice the visible window
+    const months = monthsAll.slice(start, start + visCount);
+
+    // render the month cards grid
+    const grid = document.createElement('div');
+    grid.className = 'ov-grid';
+
+    months.forEach(([ym,weeks])=>{
+      const [y,m] = ym.split('-').map(Number);
+      const card  = document.createElement('div'); card.className='mcard';
+
+      const head  = document.createElement('div'); head.className='mhead';
+      const name  = document.createElement('div'); name.className='mname'; name.textContent = monthTitle(y,m);
+      head.appendChild(name); card.appendChild(head);
+
+      const list  = document.createElement('div');
+      list.className = 'week-list';
+      weeks.forEach(w=>{
+        const btn = document.createElement('button'); btn.className='week-pill';
+        btn.textContent = `${formatWeekLabel(w.startISO)} — Wk ${w.weekNum}`;
+        const monKey = w.startISO.slice(0,10);
+        if(!w.selectable){ btn.classList.add('disabled'); btn.disabled=true; }
+        else { btn.onclick = ()=> openWeekInline(monKey); }
+        list.appendChild(btn);
+      });
+
+      card.appendChild(list);
+      grid.appendChild(card);
+    });
+
+    mount.appendChild(grid);
+
+    // update chevrons (always visible, disabled when not relevant)
+    const prevBtn = $('#ovPrev');
+    const nextBtn = $('#ovNext');
+    const canPrev = start > 0;
+    const canNext = start + visCount < total;
+
+    if (prevBtn){
+      prevBtn.disabled = !canPrev;
+      prevBtn.onclick = () => {
+        state.monthPager.offset = Math.max(0, start - 1);
+        showInlineOverview();
+      };
+    }
+    if (nextBtn){
+      nextBtn.disabled = !canNext;
+      nextBtn.onclick = () => {
+        state.monthPager.offset = Math.min(start + 1, maxOffset);
+        showInlineOverview();
+      };
+    }
+  }
+
+  // ---- Week loading: coarse → fine -------------------------------------------
+  async function fetchWeekAtGranularity(monKey, g){
+    const res = await apiGet('fetchWeek', { token, mondayKey: monKey, g });
+    return parseSlots(res && res.slots ? res.slots : []);
+  }
+
+  function mergeSlotsUnique(arrays){
+    const map = new Map(); // key by start|end so different lengths don't collide
+    arrays.flat().forEach(s => {
+      const key = `${s.start.toISOString()}|${s.end.toISOString()}`;
+      if (!map.has(key)) map.set(key, s);
+    });
+
+    // Prefer :00, :30, then :15/:45; then earlier times
+    const rank = m => ({0:0,30:1,15:2,45:3}[m % 60] ?? 99);
+    return [...map.values()].sort((a,b)=>{
+      const ra = rank(a.start.getMinutes()), rb = rank(b.start.getMinutes());
+      return ra !== rb ? ra - rb : a.start - b.start;
+    });
+  }
+
+  async function loadWeekCoarseToFine(monKey, { minSlots = 3, prefetch = false } = {}){
+    if (!prefetch) showLoading('Scanning for availability…');
+
+    const passes = [
+      { g: 60, msg: 'Scanning for availability…' },
+      { g: 30, msg: 'Looking for prep slots…' },
+      { g: 15, msg: 'Taking a closer look…' },
+    ];
+
+    const batches = [];
+    for (let i = 0; i < passes.length; i++){
+      const { g, msg } = passes[i];
+      const batch = await fetchWeekAtGranularity(monKey, g);
+      batches.push(batch);
+
+      const merged = mergeSlotsUnique(batches);
+      if (!prefetch && merged.length < minSlots && i < passes.length-1) showLoading(msg);
+      if (merged.length >= minSlots){
+        const payload = { slotsParsed: merged, exactCount: merged.length };
+        state.weekCache.set(monKey, payload);
+        return payload;
+      }
+    }
+
+    const merged = mergeSlotsUnique(batches);
+    const payload = { slotsParsed: merged, exactCount: merged.length };
+    state.weekCache.set(monKey, payload);
+    return payload;
+  }
+
+  async function ensureWeekLoaded(monKey){
+    if (state.weekCache.has(monKey)) return state.weekCache.get(monKey);
+    return loadWeekCoarseToFine(monKey); // progressive search (60 → 30 → 15)
+  }
+
+  async function openWeekInline(monKey){
+    state.currentWeek = monKey;
+    showLoading('Loading this week…');
+    try{
+      const payload = await ensureWeekLoaded(monKey);
+      renderWeekInline(payload, monKey);
+
+      // prefetch adjacent weeks in the background
+      [plusDaysKey(monKey,-7), plusDaysKey(monKey,7)].forEach(k=>{
+        if (!state.weekCache.has(k)) loadWeekCoarseToFine(k, { prefetch: true, minSlots: 1 });
+      });
+    } catch(e){
+      alert('Failed to load week.');
+    } finally {
+      hideLoading();
+    }
+  }
+
+  function renderWeekInline(payload, monKey){
+    const mount = $('#landingInline'); if(!mount) return; mount.innerHTML='';
+    const wrap = document.createElement('div'); wrap.className='week-wrap';
+
+    const head = document.createElement('div'); head.className='week-head';
+    const back = document.createElement('button'); back.className='nav-btn'; back.textContent='← Back to weeks'; back.onclick = showInlineOverview;
+    const title = document.createElement('div'); title.className='week-title'; const d=new Date(monKey+'T00:00:00Z'); title.textContent = `${d.toLocaleString('en-GB',{month:'long',year:'numeric'})} • Week ${isoWeekNumberFromKey(monKey)}`;
+    const nav = document.createElement('div'); nav.style.display='flex'; nav.style.gap='8px';
+    const prev=document.createElement('button'); prev.className='nav-btn'; prev.textContent='←'; prev.onclick=()=>openWeekInline(plusDaysKey(monKey,-7));
+    const next=document.createElement('button'); next.className='nav-btn'; next.textContent='→'; next.onclick=()=>openWeekInline(plusDaysKey(monKey,7));
+    nav.append(prev,next); head.append(back,title,nav); wrap.appendChild(head);
+
+    const grid=document.createElement('div'); grid.className='grid';
+    const gh=document.createElement('div'); gh.className='grid-header'; gh.innerHTML='<div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>'; grid.appendChild(gh);
+    const daysEl=document.createElement('div'); daysEl.className='days';
+
+    const days = weekDaysFromMondayKey(monKey); const today = todayKey(state.tz);
+    const byDay = new Map(days.map(k=>[k,[]])); (payload.slotsParsed||[]).forEach(s=>{ const key=ymdKey(s.start,state.tz); if(byDay.has(key)) byDay.get(key).push(s); }); days.forEach(k=>byDay.get(k).sort((a,b)=>a.start-b.start));
+
+    days.forEach(dayKey=>{
+      const col=document.createElement('div'); col.className='day'+(dayKey<today?' past':'');
+      const header=document.createElement('div'); header.style.display='flex'; header.style.justifyContent='space-between'; header.style.alignItems='center'; header.className='day-header';
+      const dateEl=document.createElement('div'); dateEl.className='date'; dateEl.textContent=Number(dayKey.slice(-2)); header.appendChild(dateEl); col.appendChild(header);
+      const body=document.createElement('div'); body.className='day-body';
+
+      (byDay.get(dayKey)||[]).forEach(slot=>{
+        const pill=document.createElement('button'); pill.type='button'; pill.className='pill';
+        const icon=document.createElement('span'); icon.className='icon'; icon.textContent='○';
+        const label=document.createElement('span'); label.textContent=`${fmtTime(slot.start,state.tz)} – ${fmtTime(slot.end,state.tz)}`;
+        pill.append(icon,label);
+        pill.onclick=()=>{ document.querySelectorAll('.pill.selected').forEach(el=>{ if(el!==pill){ el.classList.remove('selected'); el.querySelector('.icon').textContent='○'; }}); pill.classList.add('selected'); icon.textContent='✓'; openConfirmModal(slot); };
+        body.appendChild(pill);
+      });
+
+      col.appendChild(body); daysEl.appendChild(col);
+    });
+
+    grid.appendChild(daysEl); wrap.appendChild(grid);
+
+    const meta=document.createElement('div'); meta.className='notice'; meta.textContent=`Found ${payload.exactCount||0} slot${(payload.exactCount||0)===1?'':'s'}.`; wrap.appendChild(meta);
+
+    if((payload.exactCount||0)===0){ const banner=document.createElement('div'); banner.className='card'; banner.style.background='#f9fafb'; banner.style.textAlign='center'; banner.textContent='No weeks available'; wrap.appendChild(banner); }
+
+    mount.appendChild(wrap);
+  }
+
+  /* =====================
+   * CONFIRM MODAL
+   * ===================== */
+  function openConfirmModal(slot){
+
+  (function applyCalendarGate(){
+    const confirmBtn  = document.getElementById('confirmBtn');
+    const inviteList  = document.getElementById('inviteList');
+    const addInvite   = document.getElementById('addInviteBtn');
+    const newInvite   = document.getElementById('newInviteInput');
+    const qWrap       = document.getElementById('confirmPrep'); // or another section you want hidden
+    const footer      = document.querySelector('#confirmModal footer');
+
+    // remove any prior banner
+    footer?.querySelector('.no-cal-msg')?.remove();
+
+    if (!state.calendarAccessOk) {
+      // hide booking actions & inputs
+      if (confirmBtn) confirmBtn.style.display = 'none';
+      if (inviteList) inviteList.style.display = 'none';
+      if (addInvite)  addInvite.style.display  = 'none';
+      if (newInvite)  newInvite.style.display  = 'none';
+      if (qWrap)      qWrap.style.display      = 'none';
+
+      // add a friendly fallback message
+      const name  = state?.meta?.colleagueFirstName || state?.meta?.colleagueEmail || 'your contact';
+      const email = state?.meta?.colleagueEmail || '';
+      const msg   = document.createElement('div');
+      msg.className = 'no-cal-msg notice';
+      msg.textContent = email
+        ? `${name} hasn’t connected their calendar yet, so we can’t book automatically here. Please email ${email} to request this slot.`
+        : `${name} hasn’t connected their calendar yet, so we can’t book automatically here. Please reach out directly to request this slot.`;
+      footer?.prepend(msg);
+    } else {
+      // ensure everything is visible if access is OK
+      if (confirmBtn) confirmBtn.style.display = '';
+      if (inviteList) inviteList.style.display = '';
+      if (addInvite)  addInvite.style.display  = '';
+      if (newInvite)  newInvite.style.display  = '';
+      if (qWrap)      qWrap.style.display      = '';
+    }
+  })();
+
+    const confirmModal = $('#confirmModal'); const confirmBtn = $('#confirmBtn');
+    const when = `${fmtDate(slot.start, state.tz)} • ${fmtRange(slot.start, slot.end, state.tz)}`;
+    $('#confirmWhen').textContent = when;
+
+    const cp = $('#confirmPrep'); cp.style.display='none'; cp.textContent='';
+    if(slot.prep && slot.prep.start){ cp.style.display=''; cp.textContent = `${(state.meta?.colleagueFirstName||'They')} would begin preparing on ${fmtDate(slot.prep.start,state.tz)} at ${fmtTime(slot.prep.start,state.tz)}.`; }
+
+    // simple invitees list (preselected only)
+    const inviteList = $('#inviteList'); inviteList.innerHTML='';
+    const norm=s=>String(s||'').trim(); const isEmail=s=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(norm(s));
+    const suggested=(state.suggestedInvitees||[]).map(norm).filter(isEmail);
+    const pre=(state.preselectedCustomerEmails||[]).map(norm).filter(isEmail);
+    const lcSet=new Set(pre.map(e=>e.toLowerCase()));
+
+    const candidates = Array.from(new Set([...suggested, ...pre])).slice(0,15);
+    const selected = new Set(pre.map(e=>e.toLowerCase()));
+
+    function paint(){
+      inviteList.innerHTML='';
+      if(!candidates.length){ const p=document.createElement('p'); p.className='notice'; p.textContent='Add at least one attendee email to proceed.'; inviteList.appendChild(p); }
+      candidates.forEach((email)=>{
+        const row=document.createElement('label'); row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px'; row.style.margin='6px 0';
+        const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=selected.has(email.toLowerCase()); cb.onchange=()=>{ if(cb.checked) selected.add(email.toLowerCase()); else selected.delete(email.toLowerCase()); validate(); };
+        const span=document.createElement('span'); span.textContent=email; row.append(cb,span); inviteList.appendChild(row);
+      });
+      validate();
+    }
+    function validate(){ confirmBtn.disabled = selected.size===0; }
+    paint();
+
+    $('#addInviteBtn').onclick = ()=>{ const inp=$('#newInviteInput'); inp.classList.toggle('hide'); if(!inp.classList.contains('hide')) inp.focus(); };
+    $('#newInviteInput').onkeydown = (e)=>{ if(e.key==='Enter'){ const raw=e.target.value.trim(); if(isEmail(raw) && !candidates.includes(raw)){ candidates.push(raw); selected.add(raw.toLowerCase()); e.target.value=''; paint(); } } }; 
+
+    confirmBtn.textContent='Confirm'; confirmBtn.classList.remove('success','error');
+    confirmBtn.onclick = async ()=>{
+      if (!state.calendarAccessOk) return;
+      if(selected.size===0){ alert('Please add at least one attendee email.'); return; }
+      confirmBtn.disabled=true; confirmBtn.textContent='Booking…'; showLoading('Booking your time…'); await nextFrame();
+      try{
+        // persist invitees (fire-and-forget)
+        apiPost('saveSuggestedInvitees', { token }, { emails: candidates }).catch(()=>{});
+        apiPost('saveCustomerEmails', { token }, { emails: Array.from(selected) }).catch(()=>{});
+
+        const iso = slot.start.toISOString();
+        
+        // derive preferred prep (if present)
+        const preferredPrep = (slot.prep && slot.prep.start && slot.prep.end)
+          ? { start: slot.prep.start.toISOString(), end: slot.prep.end.toISOString() }
+          : null;
+
+        // ✅ only the CHECKED emails, preserving original casing from `candidates`
+        const selLC = new Set(Array.from(selected));                // selected is lowercased
+        const explicitCustomerEmails = candidates.filter(e => selLC.has(e.toLowerCase()));
+
+        const extra = {
+          explicitCustomerEmails,            // ✅ matches your older FE
+          customerEmails: explicitCustomerEmails, // fallback if BE reads this key
+          ...(preferredPrep ? { [iso]: preferredPrep } : {})
+        };
+        if(slot.prep && slot.prep.start && slot.prep.end){ extra[iso] = { start: slot.prep.start.toISOString(), end: slot.prep.end.toISOString() }; }
+        const resp = await apiPost('reserveSlots', { token }, { slots:[iso], extra });
+        const c = resp?.confirmed?.[iso];
+        if(!c) throw new Error('Booking failed');
+
+        // reflect in meta
+        state.meta.bookedStartISO = c.start; state.meta.bookedEndISO = c.end || new Date(slot.start.getTime() + (state.meta.durationMins||30)*60000).toISOString();
+        if(c.prep?.start && c.prep?.end){ state.meta.bookedPrepStartISO = c.prep.start; state.meta.bookedPrepEndISO = c.prep.end; }
+        state.meta.selectedStartsJSON = [c.start]; state.meta.status='USED';
+
+        hideLoading(); confirmModal.style.display='none';
+        renderTimeline();
+      }catch(e){ hideLoading(); alert((e && e.message) || 'Could not book.'); confirmBtn.disabled=false; confirmBtn.textContent='Try again'; }
+    };
+
+    $('#closeConfirm').onclick = ()=>{ confirmModal.style.display='none'; };
+    confirmModal.style.display='flex';
+  }
+
+  /* =====================
+   * STEP 2 — PREP QUESTIONS MODAL
+   * ===================== */
+  function openPrepModal(){
+    const modal = $('#prepModal'); const content = $('#prepContent'); content.innerHTML='';
+    const who = state.meta?.colleagueFirstName || 'your People Scientist';
+    $('#prepTitle').textContent = `Help ${who} prepare`;
+
+    let dirty=false; const markDirty=()=>{ dirty=true; $('#prepSaveBtn').disabled=false; updateSaveStamps(true); };
+
+    function getAns(k){ return state.stateJSON?.prep?.answers?.[k]; }
+    function setAns(k,v){ if(!state.stateJSON.prep) state.stateJSON.prep={answers:{}}; if(!state.stateJSON.prep.answers) state.stateJSON.prep.answers={}; state.stateJSON.prep.answers[k]=v; markDirty(); }
+
+    const ctx = { colleagueFirstName: who, customerName: state.meta?.customerName || state.meta?.accountName || '', meetingType: state.meta?.meetingType || '' };
+    const interp = (s)=> String(s||'').replace(/\$\{(\w+)\}/g,(_,k)=> ctx[k] ?? '');
+
+    const questions = state.confirmQuestions || [];
+    questions.forEach((q,idx)=>{
+      const key = String(q?.key || ('q'+idx));
+      const typeRaw = (q?.type || q?.questionType || q?.input || (q?.multi? 'multi': 'single')).toString().toLowerCase();
+      const type = (typeRaw==='checkbox' || typeRaw==='checkboxes') ? 'multi' : (typeRaw==='textarea'?'text':typeRaw);
+      const label = interp(q?.label || 'Question');
+
+      const row = document.createElement('div'); row.className='s2-row';
+      const title = document.createElement('div'); title.className='s2-title'; title.textContent = label; row.appendChild(title);
+
+      if(type==='text'){
+        const multiline = !!q?.multiline; const maxLength = Number(q?.maxLength||0) || undefined; const saved = getAns(key) ?? q?.saved ?? '';
+        let input; if(multiline){ input=document.createElement('textarea'); } else { input=document.createElement('input'); input.type='text'; }
+        input.className='s2-input'; input.placeholder = interp(q?.placeholder || ''); if(maxLength) input.maxLength = maxLength; input.value = String(saved||'');
+        input.addEventListener('input', debounce(()=> setAns(key, String(input.value||'').trim()), 200)); row.appendChild(input);
+      } else if(type==='multi'){
+        const opts = parseOptionsLoose(q?.options).map(cleanLabel).map(interp);
+        let saved = getAns(key); if(!Array.isArray(saved)) saved = saved==null ? [] : [String(saved)]; const sel = new Set(saved.map(String));
+        const maxSel = Number(q?.maxSelections || 0) || Infinity;
+        opts.forEach(opt=>{
+          const id = `pm_${key}_${opt.replace(/\W+/g,'_')}`; const wrap=document.createElement('div'); wrap.style.display='flex'; wrap.style.alignItems='center'; wrap.style.gap='8px'; wrap.style.margin='6px 0';
+          const cb=document.createElement('input'); cb.type='checkbox'; cb.id=id; cb.checked=sel.has(opt);
+          cb.onchange=()=>{ const cur=new Set(getAns(key)||[]); if(cb.checked){ if(cur.size>=maxSel){ cb.checked=false; alert(`You can select up to ${maxSel}.`); return; } cur.add(opt); } else { cur.delete(opt); } setAns(key, Array.from(cur)); };
+          const lab=document.createElement('label'); lab.setAttribute('for', id); lab.textContent=opt; wrap.append(cb,lab); row.appendChild(wrap);
+        });
+      } else {
+        const opts = parseOptionsLoose(q?.options).map(cleanLabel).map(interp); const saved = getAns(key) ?? (q?.saved!=null ? cleanLabel(q.saved): null);
+        opts.forEach(opt=>{ const id=`pm_${key}_${opt.replace(/\W+/g,'_')}`; const wrap=document.createElement('div'); wrap.style.display='flex'; wrap.style.alignItems='center'; wrap.style.gap='8px'; wrap.style.margin='6px 0';
+          const rb=document.createElement('input'); rb.type='radio'; rb.name=`pm_${key}`; rb.id=id; rb.value=opt; if(saved && String(saved)===opt) rb.checked=true; rb.onchange=()=> setAns(key, opt);
+          const lab=document.createElement('label'); lab.setAttribute('for', id); lab.textContent=opt; wrap.append(rb,lab); row.appendChild(wrap); });
+      }
+
+      content.appendChild(row);
+    });
+
+    function updateSaveStamps(showUnsaved){ const iso = state.stateJSON?.lastEditedAtISO; const stamp = showUnsaved? 'Unsaved changes' : (iso? fmtSaved(iso): 'Not saved yet'); $('#prepSaveTop').textContent = stamp; $('#prepSaveBottom').textContent = stamp; }
+    function fmtSaved(iso){ const d = new Date(iso); if(isNaN(+d)) return 'Not saved yet'; const date = new Intl.DateTimeFormat('en-US', { timeZone: state.tz, month:'short', day:'2-digit', year:'numeric' }).format(d); const time = fmtTime(d, state.tz); return `Last saved on ${date} at ${time}`; }
+
+    $('#prepSaveBtn').onclick = async ()=>{ try{ $('#prepSaveBtn').textContent='Saving…'; $('#prepSaveBtn').disabled=true; state.stateJSON.lastEditedAtISO = new Date().toISOString(); await apiPost('saveStateJSON', { token }, { stateJSON: state.stateJSON }); dirty=false; updateSaveStamps(false); renderTimeline(); } catch(e){ alert('Could not save right now.'); } finally { $('#prepSaveBtn').textContent='Save'; $('#prepSaveBtn').disabled=false; } };
+    $('#prepCloseBtn').onclick = ()=>{ modal.style.display='none'; };
+
+    updateSaveStamps(false); $('#prepSaveBtn').disabled=true; // will enable on edit
+    modal.style.display='flex';
+  }
+
+  function parseOptionsLoose(raw){
+    if(Array.isArray(raw)){ if(raw.length===1 && /^\s*\[/.test(raw[0])) { try{ const j=JSON.parse(raw[0]); return Array.isArray(j)? j: raw; } catch{} } return raw.map(String); }
+    if(typeof raw==='string'){ const s=raw.trim(); if(s.startsWith('[') && s.endsWith(']')){ try{ const j=JSON.parse(s); if(Array.isArray(j)) return j; } catch{} } return s.split(/[\n,;|]/).map(x=>x.trim()).filter(Boolean); }
+    return [];
+  }
+  function cleanLabel(s){ return String(s).replace(/^\s*\[/,'').replace(/\]\s*$/,'').replace(/^['"]|['"]$/g,'').replace(/''/g,"'"); }
+
+  /* =====================
+   * STEP 3 — AGENDA INLINE (auto-save on edit)
+   * ===================== */
+  function renderAgendaInline(){
+    const mount = $('#s3Mount'); if(!mount) return; mount.innerHTML='';
+
+    const head=document.createElement('div'); head.className='agenda-head';
+    const title=document.createElement('div'); title.className='agenda-title'; title.textContent='Agenda:'; head.appendChild(title);
+    const stamp=document.createElement('div'); stamp.className='save-status'; stamp.style.marginLeft='auto'; stamp.id='agendaStamp'; head.appendChild(stamp);
+
+    const list=document.createElement('div'); list.className='agenda-list'; list.id='agendaList';
+    const addRow=document.createElement('div'); addRow.className='agenda-input-row';
+    const input=document.createElement('input'); input.type='text'; input.placeholder='Add an agenda item…';
+    const addBtn=document.createElement('button'); addBtn.className='btn secondary'; addBtn.textContent='Add';
+    addRow.append(input, addBtn);
+
+    mount.append(head, list, addRow);
+
+    function items(){ return (state.stateJSON?.agenda?.items || []).slice().sort((a,b)=> (a.order||0)-(b.order||0)); }
+    function nextOrder(){ return Math.max(0, ...items().map(x=>Number(x.order||0))) + 1; }
+    function renumber(){ const arr = items(); arr.forEach((it,i)=> it.order=i+1); state.stateJSON.agenda.items = arr; }
+
+    function paint(){ list.innerHTML=''; const arr=items(); arr.forEach((it,idx)=>{
+      const row=document.createElement('div'); row.className='sel-item';
+      const left=document.createElement('div'); left.style.display='flex'; left.style.alignItems='center'; left.style.gap='8px'; left.style.flex='1 1 auto';
+      const bullet=document.createElement('span'); bullet.textContent='•'; left.appendChild(bullet);
+      const txt=document.createElement('div'); txt.textContent=it.text; txt.style.flex='1 1 auto'; left.appendChild(txt);
+
+      const actions=document.createElement('div'); actions.style.display='flex'; actions.style.gap='6px'; actions.style.flexShrink='0';
+      const edit=document.createElement('button'); edit.className='link'; edit.textContent='Edit'; edit.onclick=()=> editItem(it, txt);
+      const up=document.createElement('button'); up.className='link'; up.textContent='↑'; up.onclick=()=>{ if(idx===0) return; const a=arr[idx], b=arr[idx-1]; const tmp=a.order; a.order=b.order; b.order=tmp; renumber(); mark(); paint(); };
+      const down=document.createElement('button'); down.className='link'; down.textContent='↓'; down.onclick=()=>{ if(idx>=arr.length-1) return; const a=arr[idx], b=arr[idx+1]; const tmp=a.order; a.order=b.order; b.order=tmp; renumber(); mark(); paint(); };
+      const del=document.createElement('button'); del.className='link'; del.textContent='Remove'; del.onclick=()=>{ const src=state.stateJSON.agenda.items; const i=src.findIndex(x=>x.id===it.id); if(i>=0) src.splice(i,1); renumber(); mark(); paint(); };
+      if(idx===0) up.style.visibility='hidden'; if(idx===arr.length-1) down.style.visibility='hidden';
+      actions.append(edit, up, down, del);
+
+      row.append(left, actions); list.appendChild(row);
+    }); updateStamp(false); }
+
+    function editItem(it, txtEl){ const inp=document.createElement('input'); inp.type='text'; inp.value=it.text; txtEl.replaceWith(inp); inp.focus(); inp.onkeydown=(e)=>{ if(e.key==='Enter'){ it.text=String(inp.value||'').trim(); mark(); paint(); } }; inp.onblur=()=>{ it.text=String(inp.value||'').trim(); mark(); paint(); } }
+    function mark(){ state.stateJSON.lastEditedAtISO = new Date().toISOString(); debouncedSave(); updateStamp(true); }
+    function updateStamp(unsaved){ const iso=state.stateJSON?.lastEditedAtISO; const s = unsaved? 'Unsaved changes' : (iso? fmtSaved(iso): 'Not saved yet'); $('#agendaStamp').textContent=s; }
+    function fmtSaved(iso){ const d=new Date(iso); if(isNaN(+d)) return 'Not saved yet'; const date=new Intl.DateTimeFormat('en-US',{ timeZone: state.tz, month:'short', day:'2-digit', year:'numeric' }).format(d); const time=fmtTime(d,state.tz); return `Last saved on ${date} at ${time}`; }
+
+    const debouncedSave = debounce(async ()=>{ try{ await apiPost('saveStateJSON', { token }, { stateJSON: state.stateJSON }); updateStamp(false); } catch{} }, 500);
+
+    addBtn.onclick = ()=>{ const text=String(input.value||'').trim(); if(!text) return; input.value=''; if(!state.stateJSON.agenda) state.stateJSON.agenda={items:[]}; state.stateJSON.agenda.items.push({ id:'id_'+Math.random().toString(36).slice(2,9), text, order: nextOrder() }); mark(); paint(); };
+    input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); addBtn.click(); } });
+
+    paint();
+  }
+
+  /* =====================
+   * WEEKS DATA: current quarter (past disabled by minNotice)
+   * ===================== */
+  // add N months to a YYYY-MM-01 key
+  function addMonthsKey(ymdKey, n){
+    const d = new Date(ymdKey + 'T00:00:00Z');
+    d.setUTCMonth(d.getUTCMonth() + n);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-01`;
+  }
+
+  function generateWeeksForRange({
+    startY,               // e.g. 2025
+    startM,               // 1-12
+    monthCount,           // how many months to include
     initialTz = 'UTC',
-    weeks = 24,
     minNoticeDays = 0,
     weekdaysCSV = 'Mon,Tue,Wed,Thu,Fri',
     blackoutDatesCSV = ''
-  } = {}) {
-    // Anchor from "this week's Monday" (in your UI you label by Monday starts)
-    const today = todayKey(initialTz);            // 'YYYY-MM-DD' in user's tz
-    const firstMonday = mondayKey(today);         // Monday key of the current week
-    const minStartKey = plusDaysKey(today, minNoticeDays); // earliest bookable day (yyyy-mm-dd)
-  
-    const allowedWeekdays = parseAllowedWeekdays(weekdaysCSV);
-    const blackouts = new Set(
-      String(blackoutDatesCSV || '')
-        .split(/[,\s]+/)
-        .map(s => s.trim())
-        .filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s))
-    );
-  
+  } = {}){
+    const pad = n => String(n).padStart(2, '0');
+    const startKey = `${startY}-${pad(startM)}-01`;
+    const afterKey = addMonthsKey(startKey, monthCount);
+
+    const allowed  = parseAllowedWeekdays(weekdaysCSV);
+    const blackouts = new Set(String(blackoutDatesCSV||'')
+                      .split(/[\s,]+/)
+                      .filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s)));
+    const today    = todayKey(initialTz);
+    const minStart = plusDaysKey(today, minNoticeDays);
+
     const out = [];
-    for (let i = 0; i < weeks; i++) {
-      const monKey = plusDaysKey(firstMonday, i * 7);
-      const days = weekDaysFromMondayKey(monKey);
-  
-      // selectable if ANY allowed day in the week is on/after minStart and not blacked out
-      const selectable = days.some(dayKey =>
-        dayKey >= minStartKey &&
-        !blackouts.has(dayKey) &&
-        allowedWeekdays.has(dayOfWeekFromKey(dayKey))
+    for(let wk = mondayKey(startKey); wk < mondayKey(afterKey); wk = plusDaysKey(wk, 7)){
+      const days = weekDaysFromMondayKey(wk);
+      const selectable = days.some(d =>
+        d >= minStart &&
+        !blackouts.has(d) &&
+        allowed.has(dayOfWeekFromKey(d))
       );
-  
       out.push({
-        startISO: new Date(monKey + 'T00:00:00Z').toISOString(),
-        weekNum:  isoWeekNumberFromKey(monKey),
+        startISO: new Date(wk + 'T00:00:00Z').toISOString(),
+        weekNum:  isoWeekNumberFromKey(wk),
         selectable
       });
     }
     return out;
   }
 
-  /* ===== Landing flow helpers ===== */
-  function getPrimarySelectedStart(meta) {
-    // Try selectedStartsJSON (array or JSON string), else bookedStartISO
-    let arr = [];
-    try {
-      if (Array.isArray(meta.selectedStartsJSON)) arr = meta.selectedStartsJSON;
-      else if (typeof meta.selectedStartsJSON === 'string' && meta.selectedStartsJSON.trim()) {
-        arr = JSON.parse(meta.selectedStartsJSON);
-      }
-    } catch { /* ignore */ }
-  
-    const dates = (arr || []).map(s => new Date(s)).filter(d => !isNaN(+d));
-    if (!dates.length && meta.bookedStartISO) {
-      const d = new Date(meta.bookedStartISO);
-      return isNaN(+d) ? null : d;
-    }
-    if (!dates.length) return null;
-  
-    const now = new Date();
-    const future = dates.filter(d => d > now).sort((a,b)=>a-b);
-    if (future.length) return future[0];          // earliest future
-    return dates.sort((a,b)=>b-a)[0];             // latest past
-  }
-  
-  function computeFlow(meta){
-    const sel = getPrimarySelectedStart(meta);
-    if (!sel) return 'NEW';
-    return (sel > new Date()) ? 'USED_FUTURE' : 'USED_PAST';
-  }
-  
-/**********************
- * Inline Quarter + Week (landing page, "See more" appends)
- **********************/
+  function materializeInitialMonths(){
+    const meta = state.meta || {};
+    const tz   = meta.initialTz || state.tz || 'UTC';
 
-// helpers
-function ymToDate(ym){ const [y,m]=ym.split('-').map(Number); return new Date(Date.UTC(y, m-1, 1)); }
-function monthTitleFromYM(ym){ const [y,m]=ym.split('-').map(Number); return monthTitle(y,m); }
-function qKeyOfYM(ym){
-  const [y,m] = ym.split('-').map(Number);
-  const q = Math.floor((m-1)/3)+1;
-  return `${y}-Q${q}`;
-}
-function monthsInQuarter(y,q){
-  const start = (q-1)*3+1;
-  const pad = n => String(n).padStart(2,'0');
-  return [`${y}-${pad(start)}`, `${y}-${pad(start+1)}`, `${y}-${pad(start+2)}`];
-}
-function parseQKey(qkey){ const [y, qpart] = qkey.split('-Q'); return { y: +y, q: +qpart }; }
+    // Controls (safe defaults)
+    const monthsAhead  = Number(meta?.options?.monthsAhead  ?? 2); // current + next 2
+    const monthsBehind = Number(meta?.options?.monthsBehind ?? 0); // usually 0
+    const minSelectableWeeks = Number(meta?.options?.minSelectableWeeks ?? 0); // 0 = no requirement
 
-// Build a continuous list of quarters spanning the data you have.
-function buildQuarterListFull({ futureQuarters = 3, pastQuarters = 0 } = {}) {
-  const keys = [...(state.monthWeeks?.keys() || [])].sort(); // ["YYYY-MM", ...]
-  const now = new Date();
-  const curY = now.getUTCFullYear();
-  const curM = now.getUTCMonth() + 1;
-  const curQ  = Math.floor((curM - 1) / 3) + 1;
-  const curQKey = `${curY}-Q${curQ}`;
+    // Start month = current month minus monthsBehind
+    const now   = new Date();
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - monthsBehind, 1));
+    const startY = start.getUTCFullYear();
+    const startM = start.getUTCMonth() + 1;
+    const baseCount = monthsAhead + monthsBehind + 1; // include current month
 
-  // Helper utilities
-  const ymToDate = (ym) => { const [y,m]=ym.split('-').map(Number); return new Date(Date.UTC(y, m-1, 1)); };
-  const monthsInQuarter = (y,q) => {
-    const s = (q-1)*3 + 1, pad = n => String(n).padStart(2,'0');
-    return [`${y}-${pad(s)}`, `${y}-${pad(s+1)}`, `${y}-${pad(s+2)}`];
-  };
-  const toNextQuarter = (y,q) => (q===4) ? { y:y+1, q:1 } : { y, q:q+1 };
-  const toPrevQuarter = (y,q) => (q===1) ? { y:y-1, q:4 } : { y, q:q-1 };
-
-  // Determine natural bounds from existing weeks (may be just current quarter)
-  let minYM = keys[0] || `${curY}-${String(curM).padStart(2,'0')}`;
-  let maxYM = keys[keys.length-1] || minYM;
-
-  // Ensure current quarter is within bounds
-  const curYM = `${curY}-${String(curM).padStart(2,'0')}`;
-  if (ymToDate(minYM) > ymToDate(curYM)) minYM = curYM;
-  if (ymToDate(maxYM) < ymToDate(curYM)) maxYM = curYM;
-
-  // Convert bounds to (y,q)
-  const ymToYQ = (ym) => {
-    const d = ymToDate(ym);
-    const y = d.getUTCFullYear();
-    const m = d.getUTCMonth()+1;
-    return { y, q: Math.floor((m-1)/3)+1 };
-  };
-  let { y: minY, q: minQ } = ymToYQ(minYM);
-  let { y: maxY, q: maxQ } = ymToYQ(maxYM);
-
-  // Expand by requested horizon
-  for (let i = 0; i < pastQuarters; i++) ({ y:minY, q:minQ } = toPrevQuarter(minY, minQ));
-  for (let i = 0; i < futureQuarters; i++) ({ y:maxY, q:maxQ } = toNextQuarter(maxY, maxQ));
-
-  // Build list from min..max
-  const list = [];
-  let y = minY, q = minQ;
-  while (true) {
-    list.push({ key: `${y}-Q${q}`, label: `Q${q} ${y}`, months: monthsInQuarter(y, q) });
-    if (y === maxY && q === maxQ) break;
-    ({ y, q } = toNextQuarter(y, q));
-  }
-
-  // Ensure current quarter is present (it will be)
-  if (!list.find(x => x.key === curQKey)) {
-    list.push({ key: curQKey, label: `Q${curQ} ${curY}`, months: monthsInQuarter(curY, curQ) });
-    list.sort((a,b) => a.key.localeCompare(b.key));
-  }
-
-  return list;
-}
-
-
-function findCurrentQuarterIndex(quarters){
-  const now = new Date();
-  const y = now.getUTCFullYear();
-  const m = now.getUTCMonth()+1;
-  const q = Math.floor((m-1)/3)+1;
-  const key = `${y}-Q${q}`;
-  const i = quarters.findIndex(x => x.key === key);
-  return i >= 0 ? i : 0;
-}
-
-// public entry from Step 1 / Rebook
-function showInlineOverview(){
-  const mount = document.getElementById('landingInline');
-  if (!mount) return;
-
-  // Use your existing config to decide how many future quarters to show
-  const monthsAhead = Number(state.meta?.options?.monthsAhead ?? 12);
-  const futureQuarters = Math.max(1, Math.ceil(monthsAhead / 3)); // e.g., 12 -> 4
-
-  state._quarters = buildQuarterListFull({ futureQuarters, pastQuarters: 0 });
-  state._qStartIndex = findCurrentQuarterIndex(state._quarters);
-  state._qRenderedEnd = state._qStartIndex;   // start with current quarter only
-  const MIN_WEEKS = 6;
-  const opts = {
-    initialTz: state.meta?.initialTz || state.tz || 'UTC'
-  };
-  // Make sure the current quarter is materialized (init only added current quarter)
-  materializeQuarter(state._quarters[state._qStartIndex].key, opts);
-
-  let guard = 0;
-  while (countSelectableWeeksInState() < MIN_WEEKS && state._qRenderedEnd < state._quarters.length - 1 && guard++ < 8) {
-    state._qRenderedEnd += 1;
-    materializeQuarter(state._quarters[state._qRenderedEnd].key, opts);
-  }
-
-  renderInlineQuarterList();                   // "See more" will now append the next quarter(s)
-}
-
-function renderInlineQuarterList(){
-  closeConfirmModal(true);
-  const mount = document.getElementById('landingInline');
-  if (!mount) return;
-
-  // Full re-render of all currently "expanded" quarters
-  mount.innerHTML = '';
-
-  const quarters = state._quarters || [];
-  if (!quarters.length){
-    mount.innerHTML = '<div class="notice">No weeks available.</div>';
-    return;
-  }
-
-  const start = state._qStartIndex ?? 0;
-  const end   = state._qRenderedEnd ?? start;
-
-  for (let i = start; i <= end; i++){
-    renderQuarterSection(quarters[i], mount);
-  }
-
-  // "See more" (append one more quarter)
-  const moreWrap = document.createElement('div');
-  moreWrap.className = 'inline-controls';
-  const moreBtn = document.createElement('button');
-  moreBtn.className = 'btn';
-  moreBtn.textContent = (end < quarters.length-1) ? 'See more' : 'No more to show';
-  moreBtn.disabled = end >= quarters.length-1;
-  moreBtn.onclick = () => {
-    const nextEnd = Math.min(end + 1, quarters.length - 1);
-    // Generate weeks for each newly revealed quarter
-    for (let i = end + 1; i <= nextEnd; i++) {
-      const q = quarters[i];
-      const { y, q: qn } = parseQKey(q.key);
-      const opts = {
-        initialTz: state.meta?.initialTz || state.tz || 'UTC',
-        minNoticeDays: Number(state.meta?.options?.minNoticeDays ?? 0),
-        weekdaysCSV: String(state.meta?.options?.weekdaysCSV || 'Mon,Tue,Wed,Thu,Fri'),
-        blackoutDatesCSV: String(state.meta?.options?.blackoutDatesCSV || '')
-      };
-      const weeks = generateWeeksForQuarter({ year: y, quarter: qn, ...opts });
-      // merge into state.monthWeeks
-      const mw = buildMonthWeeksFromWeekList(weeks);
-      for (const [ym, arr] of mw.entries()) {
-        if (!state.monthWeeks.has(ym)) state.monthWeeks.set(ym, []);
-        // append any weeks we don't already have
-        const existing = state.monthWeeks.get(ym);
-        const seen = new Set(existing.map(w => w.startISO));
-        arr.forEach(w => { if (!seen.has(w.startISO)) existing.push(w); });
-        existing.sort((a,b)=>a.startISO.localeCompare(b.startISO));
-      }
-    }
-    state._qRenderedEnd = nextEnd;
-    renderInlineQuarterList();
-  };
-  moreWrap.appendChild(moreBtn);
-  mount.appendChild(moreWrap);
-}
-
-// Render one quarter section: title + 3 month cards in ov-grid
-function renderQuarterSection(quarter, mount){
-  const title = document.createElement('div');
-  title.className = 'inline-title';
-  title.textContent = quarter.label;
-  mount.appendChild(title);
-
-  const grid = document.createElement('div');
-  grid.className = 'ov-grid';
-
-  quarter.months.forEach(ym => {
-    const weeks = state.monthWeeks.get(ym) || []; // may be empty
-    const card = document.createElement('div'); card.className = 'mcard';
-
-    const head = document.createElement('div'); head.className = 'mhead';
-    const name = document.createElement('div'); name.className = 'mname'; name.textContent = monthTitleFromYM(ym);
-    head.appendChild(name); card.appendChild(head);
-
-    const list = document.createElement('div'); list.className = 'weeks';
-
-    if (!weeks.length){
-      const empty = document.createElement('div');
-      empty.className = 'notice';
-      empty.textContent = 'No weeks to show.';
-      list.appendChild(empty);
-    } else {
-      weeks.forEach(w => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'week-pill';
-        btn.textContent = `${formatWeekLabel(w.startISO)} — Wk ${w.weekNum}`;
-
-        const monKey = w.startISO.slice(0,10);
-        if (!w.selectable) {
-          btn.classList.add('disabled');
-          btn.disabled = true;
-        } else {
-          btn.addEventListener('click', () => openWeekInline(monKey));
-        }
-        list.appendChild(btn);
-      });
-    }
-
-    card.appendChild(list);
-    grid.appendChild(card);
-  });
-
-  mount.appendChild(grid);
-}
-
-// Show a week inline (replaces the cards area); Back restores the list as expanded
-function openWeekInline(mondayKey){
-  state.currentWeek = mondayKey;
-  const mount = document.getElementById('landingInline');
-  if (!mount) return;
-
-  mount.innerHTML = '';
-  showLoading('Loading this week…');
-  ensureWeekLoaded(mondayKey)
-    .then(payload => {
-      renderWeekInline(payload, mondayKey);
-      prefetchNeighbors(mondayKey);
-    })
-    .catch(err => alert('Failed to load week.\n' + (err?.message || err)))
-    .finally(hideLoading);
-}
-
-function renderWeekInline(payload, mondayKey){
-  const mount = document.getElementById('landingInline');
-  if (!mount) return;
-
-  const wrap = document.createElement('div');
-  wrap.className = 'week-wrap';
-
-  const head = document.createElement('div');
-  head.className = 'week-head';
-
-  const back = document.createElement('button');
-  back.className = 'nav-btn';
-  back.textContent = '← Back to weeks';
-  back.onclick = () => { 
-  closeConfirmModal(true);   
-  renderInlineQuarterList();
-  };
-
-  const title = document.createElement('div');
-  title.className = 'week-title';
-  const d = new Date(mondayKey + 'T00:00:00Z');
-  title.textContent = `${d.toLocaleString('en-GB', { month: 'long', year: 'numeric' })} • Week ${isoWeekNumberFromKey(mondayKey)}`;
-  const tzPicker = makeInlineTzPicker({ mondayKey });
-
-  const nextPrev = document.createElement('div');
-  nextPrev.style.display = 'flex';
-  nextPrev.style.gap = '8px';
-
-  const prevBtn = document.createElement('button');
-  prevBtn.className = 'nav-btn';
-  prevBtn.textContent = '←';
-  prevBtn.onclick = () => openWeekInline(plusDaysKey(mondayKey, -7));
-
-  const nextBtn = document.createElement('button');
-  nextBtn.className = 'nav-btn';
-  nextBtn.textContent = '→';
-  nextBtn.onclick = () => openWeekInline(plusDaysKey(mondayKey, 7));
-
-  nextPrev.append(prevBtn, nextBtn);
-  head.append(back, title, tzPicker, nextPrev);
-  wrap.appendChild(head);
-
-  // grid (same logic as your renderWeek)
-  const grid = document.createElement('div');
-  grid.className = 'grid';
-  const gh = document.createElement('div');
-  gh.className = 'grid-header';
-  gh.innerHTML = '<div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>';
-  grid.appendChild(gh);
-
-  const daysEl = document.createElement('div');
-  daysEl.className = 'days';
-
-  const days = weekDaysFromMondayKey(mondayKey);
-  const today = todayKey(state.tz);
-  const byDay = new Map(days.map(k => [k, []]));
-
-  (payload.slotsParsed || []).forEach(s => {
-    const key = ymdKey(s.start, state.tz);
-    if (byDay.has(key)) byDay.get(key).push(s);
-  });
-  days.forEach(k => byDay.get(k).sort((a,b)=>a.start-b.start));
-
-  days.forEach(dayKey => {
-    const inPast = dayKey < today;
-    const dNum = Number(dayKey.slice(-2));
-    const col = document.createElement('div');
-    col.className = 'day' + (inPast ? ' past' : '');
-
-    const header = document.createElement('div');
-    header.className = 'day-header';
-    const dateEl = document.createElement('div');
-    dateEl.className = 'date';
-    dateEl.textContent = dNum;
-    header.appendChild(dateEl);
-    col.appendChild(header);
-
-    const body = document.createElement('div');
-    body.className = 'day-body';
-
-    const items = byDay.get(dayKey) || [];
-    items.forEach(slot => {
-      const iso = slot.start.toISOString();
-      const pill = document.createElement('button');
-      pill.type = 'button';
-      pill.className = 'pill';
-
-      const icon = document.createElement('span'); icon.className = 'icon'; icon.textContent = '○';
-      const label = document.createElement('span'); label.className = 'label';
-      label.textContent = `${tzTimeHM(slot.start, state.tz)} – ${tzTimeHM(slot.end, state.tz)}`;
-      pill.append(icon, label);
-
-      pill.onclick = () => {
-        // single-select: clear any other selected pill
-        document.querySelectorAll('.pill.selected').forEach(el => {
-          if (el !== pill) {
-            el.classList.remove('selected');
-            const ic = el.querySelector('.icon'); if (ic) ic.textContent = '○';
-          }
-        });
-      
-        pill.classList.add('selected'); icon.textContent = '✓';
-        pendingIso = iso;        
-        pendingPill = pill;             
-        openConfirmModal(iso, slot);
-      };
-      
-      body.appendChild(pill);
+    const gen = (count) => generateWeeksForRange({
+      startY,
+      startM,
+      monthCount: 6,
+      initialTz: tz,
+      minNoticeDays: Number(meta?.options?.minNoticeDays || 0),
+      weekdaysCSV:   String(meta?.options?.weekdaysCSV   || 'Mon,Tue,Wed,Thu,Fri'),
+      blackoutDatesCSV: String(meta?.options?.blackoutDatesCSV || '')
     });
 
-    col.appendChild(body);
-    daysEl.appendChild(col);
-  });
+    // Make the initial set
+    let weeks = gen(baseCount);
 
-  grid.appendChild(daysEl);
-  wrap.appendChild(grid);
-
-  const meta = document.createElement('div');
-  meta.className = 'notice';
-  meta.textContent = `Found ${payload.exactCount || 0} slot${(payload.exactCount || 0) === 1 ? '' : 's'}.`;
-  wrap.appendChild(meta);
-
-  mount.innerHTML = '';
-  mount.appendChild(wrap);
-}
-
-
-  function setStepCard(el, {state, title, body, onClick, showRebook, extraClass}) {
-    el.classList.remove('active','locked','inactive','booked');
-    el.classList.add(state);
-    if (extraClass) el.classList.add(extraClass);
-  
-    el.innerHTML = `
-      <h3>${escapeHtml(title)}</h3>
-      <p>${escapeHtml(body)}</p>
-      ${showRebook ? `<div class="step-subtle" id="rebookLink">Rebook</div>` : '' }
-    `;
-  
-    el.onclick = null;
-    if (state === 'active' && typeof onClick === 'function') {
-      el.onclick = onClick;
-    } else if (showRebook) {
-      el.querySelector('#rebookLink')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        showInlineOverview();          // ← was goToOverview()
-      });
-    }
-  }
-
-function runBlocking(promiseFactory, {
-  startMsg = "Working…",
-  slowMsg  = "Still working… calendars can be slow.",
-  slowAfterMs = 1200,
-  preShown = false            // if true, we assume the modal is already visible
-} = {}) {
-  if (preShown) {
-    loadingMsg.textContent = startMsg;
-  } else {
-    showLoading(startMsg);
-  }
-
-  // ensure the “startMsg” frame actually renders before doing work
-  return nextFrame().then(() => {
-    let slowTimer = setTimeout(() => { loadingMsg.textContent = slowMsg; }, slowAfterMs);
-    const clear = () => { clearTimeout(slowTimer); hideLoading(); };
-
-    return Promise.resolve()
-      .then(() => promiseFactory())
-      .then(v  => { clear(); return v; })
-      .catch(e => { clear(); throw e; });
-  });
-}
-
-function generateWeeksForQuarter({
-  year, quarter,
-  initialTz = 'UTC',
-  minNoticeDays = 0,
-  weekdaysCSV = 'Mon,Tue,Wed,Thu,Fri',
-  blackoutDatesCSV = ''
-} = {}) {
-  const pad = n => String(n).padStart(2,'0');
-  const startMonth = (quarter - 1) * 3 + 1;              // 1,4,7,10
-  const startKey   = `${year}-${pad(startMonth)}-01`;    // YYYY-MM-01
-  const afterKey   = (startMonth === 10)
-    ? `${year + 1}-01-01`
-    : `${year}-${pad(startMonth + 3)}-01`;
-
-  const startMon = mondayKey(startKey);
-  const afterMon = mondayKey(afterKey);
-
-  const allowedWeekdays = parseAllowedWeekdays(weekdaysCSV);
-  const blackouts = new Set(
-    String(blackoutDatesCSV||'')
-      .split(/[,\s]+/)
-      .map(s => s.trim())
-      .filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s))
-  );
-  const today = todayKey(initialTz);
-  const minStartKey = plusDaysKey(today, minNoticeDays);
-
-  const out = [];
-  for (let wk = startMon; wk < afterMon; wk = plusDaysKey(wk, 7)) {
-    const days = weekDaysFromMondayKey(wk);
-    const selectable = days.some(d =>
-      d >= minStartKey &&
-      !blackouts.has(d) &&
-      allowedWeekdays.has(dayOfWeekFromKey(d))
-    );
-    out.push({
-      startISO: new Date(wk + 'T00:00:00Z').toISOString(),
-      weekNum:  isoWeekNumberFromKey(wk),
-      selectable
-    });
-  }
-  return out;
-}
-
-function saveStatePatch(patch) {
-  return apiPost('saveStatePatch', { token }, patch).then(res => {
-    if (res && res.stateJSON) state.stateJSON = res.stateJSON; // server returns merged state
-    return res;
-  });
-}
-
-// Give the browser a frame (or two) to paint UI changes
-const nextFrame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-
-// ---- IDs, dirty flag, and snapshot saving ----
-function genId(){ return 'id_' + Math.random().toString(36).slice(2, 9); }
-
-function ensureStateShape(){
-  if (!state.stateJSON) state.stateJSON = { version:1, lastEditedAtISO:new Date().toISOString(), prep:{answers:{}}, agenda:{items:[]} };
-  if (!state.stateJSON.prep) state.stateJSON.prep = { answers:{} };
-  if (!state.stateJSON.agenda) state.stateJSON.agenda = { items:[] };
-  if (!Array.isArray(state.stateJSON.agenda.items)) state.stateJSON.agenda.items = [];
-}
-
-async function saveSnapshot(){
-  ensureStateShape();
-  const btn = document.getElementById('s2SaveBtn');
-  if (btn){ btn.textContent = 'Saving…'; btn.disabled = true; }
-
-  try{
-    state.stateJSON.lastEditedAtISO = new Date().toISOString();
-    await apiPost('saveStateJSON', { token }, { stateJSON: state.stateJSON });
-    markClean();                         // will hide the button + update timestamp
-  } catch(e){
-    console.warn('saveStateJSON failed', e);
-    if (btn){ btn.textContent = 'Save recent changes 💾'; btn.disabled = false; }
-    alert('Could not save right now. Your changes are still visible locally.');
-    updateSaveUI();
-  } finally {
-    if (btn){ btn.textContent = 'Save recent changes 💾'; btn.disabled = false; }
-  }
-}
-
-// ---- unified dirty tracking ----
-let agendaDirty = false;
-let prepDirty   = false;
-
-function markDirty(){
-  updateSaveUI();
-}
-
-function markClean(){
-  agendaDirty = false;
-  prepDirty   = false;
-  updateSaveUI();   // hides the Save button + updates "Last saved..."
-}
-
-function missingRequiredCount(){
-  const qs = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length
-    ? state.confirmQuestions
-    : (state.confirmQuestion ? [state.confirmQuestion] : []);
-  if (!qs.length) return 0;
-
-  const answers = state.stateJSON?.prep?.answers || {};
-  let missing = 0;
-
-  qs.forEach((q, idx) => {
-    if (!q?.required) return;
-    const key = String(q.key || ('q' + idx));
-    const val = answers[key];
-
-    // Treat empty arrays or blank strings as missing
-    if (isBlank(val)) missing++;
-  });
-  return missing;
-}
-
-
-function updateSaveUI(){
-  const btn  = document.getElementById('s2SaveBtn');
-  const last = document.getElementById('s2LastSaved');
-  const hint = document.getElementById('s2ReqHint');
-
-  const isDirty = (agendaDirty || prepDirty);
-
-  // Button only shows when there are unsaved edits
-  if (btn) btn.style.display = isDirty ? '' : 'none';
-
-  // Status text: either "Unsaved changes" or the last saved timestamp
-  if (last) {
-    last.textContent = isDirty
-      ? 'Unsaved changes'
-      : fmtLastSaved(state.stateJSON?.lastEditedAtISO, state.tz);
-  }
-
-  // Keep your required-questions count (purely informational now)
-  updatePrepBannerHintOnly();
-}
-
-
-function fmtLastSaved(iso, tz){
-  if (!iso) return 'Not saved yet';
-  const d = new Date(iso);
-  if (isNaN(+d)) return 'Not saved yet';
-  const date = new Intl.DateTimeFormat('en-US', { timeZone: tz, month:'short', day:'2-digit', year:'numeric' }).format(d);
-  const time = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour:'2-digit', minute:'2-digit', hour12:false }).format(d);
-  return `Last saved on ${date} at ${time}`;
-}
-
-function buildRequiredHintText(){
-  const m = missingRequiredCount();
-  if (m <= 0) return '';
-  return `(${m === 1 ? '1 required question is unanswered.' : `${m} required questions are unanswered.`})`;
-}
-
-function renderPrepBanner(slot){
-  const s2Sub = document.getElementById('s2Sub');
-  if (!s2Sub) return;
-
-  const hasQs   = Array.isArray(state.confirmQuestions) && state.confirmQuestions.length > 0;
-  const hasPrep = !!(slot && slot.prep && slot.prep.start && slot.prep.end);
-  const colleagueName =
-    state?.meta?.colleagueFirstName ||
-    state?.meta?.colleagueEmail ||
-    'your People Scientist';
-
-  s2Sub.classList.add('prep-card');
-  s2Sub.style.display = hasQs ? '' : 'none';
-
-  // Top line
-  let top;
-  if (hasPrep){
-    const ps = slot.prep.start;
-    const startTime = fmtTimeLocal(ps, state.tz).replace(':','h');
-    top = `We've held a preparation slot for ${colleagueName} on ${fmtDateLocal(ps, state.tz)} at ${startTime}. ` +
-          `Answering the questions below will help them in their preparation.`;
-  } else {
-    top = `Answering the questions below will help them in their preparation.`;
-  }
-
-  const hint = buildRequiredHintText();
-  s2Sub.innerHTML = `
-    <div class="prep-banner"><strong>${top}</strong></div>
-    ${hint ? `<div class="prep-hint">${hint}</div>` : ''}
-    <div id="s2QMount"></div>
-  `;
-}
-
-function updatePrepBannerHintOnly(){
-  const s2Sub = document.getElementById('s2Sub');
-  if (!s2Sub || s2Sub.style.display === 'none') return;
-  const hint = buildRequiredHintText();
-  let hintEl = s2Sub.querySelector('.prep-hint');
-  if (hint && !hintEl){
-    hintEl = document.createElement('div');
-    hintEl.className = 'prep-hint';
-    hintEl.textContent = hint;
-    s2Sub.appendChild(hintEl);
-  } else if (hintEl){
-    if (hint) { hintEl.textContent = hint; hintEl.style.display=''; }
-    else { hintEl.remove(); }
-  }
-}
-
-function getAnswer(key) {
-  return state?.stateJSON?.prep?.answers?.[key];
-}
-function setAnswer(key, val) {
-  ensureStateShape();
-  state.stateJSON.prep.answers[key] = val;
-  state.stateJSON.lastEditedAtISO = new Date().toISOString();
-  prepDirty = true;
-  markDirty();
-}
-function toArray(v) {
-  if (Array.isArray(v)) return v;
-  if (v == null) return [];
-  return [String(v)];
-}
-function isBlank(val) {
-  if (val == null) return true;
-  if (Array.isArray(val)) return val.length === 0;
-  if (typeof val === 'string') return val.trim() === '';
-  return false;
-}
-
-// near top
-const TZ_STORE_KEY = 'bookinglinks_tz';
-
-// robust GMT offset for a zone "now"
-function tzOffsetMinutes(tz, at = new Date()){
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz, hour12: false,
-    year:'numeric', month:'2-digit', day:'2-digit',
-    hour:'2-digit', minute:'2-digit', second:'2-digit'
-  });
-  const parts = Object.fromEntries(dtf.formatToParts(at).map(p => [p.type, p.value]));
-  const asUTC = Date.UTC(+parts.year, +parts.month-1, +parts.day, +parts.hour, +parts.minute, +parts.second);
-  // difference between "time in that tz" and actual UTC => offset (mins)
-  return Math.round((asUTC - at.getTime())/60000);
-}
-function fmtOffset(mins){
-  const sign = mins >= 0 ? '+' : '-';
-  const a = Math.abs(mins);
-  const h = String(Math.floor(a/60)).padStart(2,'0');
-  const m = String(a%60).padStart(2,'0');
-  return `GMT${sign}${h}:${m}`;
-}
-
-function buildTzList(baseList){
-  const seen = new Set();
-  const zones = (baseList || []).filter(z => {
-    if (!z || seen.has(z)) return false; seen.add(z); return true;
-  });
-  // ensure the browser tz is present
-  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  if (!seen.has(browserTz)) zones.unshift(browserTz);
-  // sort by current offset, then name
-  const now = new Date();
-  return zones
-    .map(z => ({ z, off: tzOffsetMinutes(z, now) }))
-    .sort((a,b) => a.off - b.off || a.z.localeCompare(b.z));
-}
-
-function tzOffsetLabel(zone, refDate = new Date()) {
-  // Offset (mins) for zone at refDate
-  const utc = new Date(Date.UTC(
-    refDate.getUTCFullYear(), refDate.getUTCMonth(), refDate.getUTCDate(),
-    refDate.getUTCHours(), refDate.getUTCMinutes(), refDate.getUTCSeconds()
-  ));
-  const zoned = new Date(refDate.toLocaleString('en-US', { timeZone: zone }));
-  const offMin = Math.round((zoned - utc) / 60000);
-  const sign = offMin >= 0 ? '+' : '-';
-  const hh = String(Math.floor(Math.abs(offMin) / 60)).padStart(2, '0');
-  const mm = String(Math.abs(offMin) % 60).padStart(2, '0');
-  return `GMT${sign}${hh}:${mm} — ${zone}`;
-}
-
-function makeInlineTzPicker({ mondayKey }) {
-  const ref = new Date(mondayKey + 'T12:00:00Z'); // middle of the week -> DST-stable label
-
-  // Ensure we have a valid, de-duped, offset-sorted list
-  const baseList = normalizeTimezones(timezones);
-  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  if (!baseList.includes(browserTz)) baseList.unshift(browserTz);
-
-  // Sort by current offset then by name (reuse your helpers)
-  const list = buildTzList(baseList).map(x => x.z);
-
-  const wrap = document.createElement('div');
-  wrap.style.display = 'flex';
-  wrap.style.alignItems = 'center';
-  wrap.style.gap = '6px';
-  wrap.style.marginLeft = '12px';
-
-  const lab = document.createElement('span');
-  lab.textContent = 'Timezone:';
-  lab.style.fontSize = '12px';
-  lab.style.color = '#555';
-
-  const sel = document.createElement('select');
-  sel.style.padding = '4px 6px';
-  sel.style.fontSize = '12px';
-  sel.style.borderRadius = '6px';
-
-  sel.innerHTML = '';
-  const current = state.tz || localStorage.getItem(TZ_STORE_KEY) || browserTz || 'UTC';
-
-  for (const z of list) {
-    let label;
-    try {
-      label = tzOffsetLabel(z, ref); // may throw if z somehow invalid
-    } catch {
-      continue; // skip bad entries defensively
-    }
-    const opt = document.createElement('option');
-    opt.value = z;
-    opt.textContent = label;
-    if (z === current) opt.selected = true;
-    sel.appendChild(opt);
-  }
-
-  // If somehow nothing rendered, add a minimal fallback
-  if (!sel.options.length) {
-    const z = 'UTC';
-    const opt = document.createElement('option');
-    opt.value = z;
-    opt.textContent = 'GMT+00:00 — UTC';
-    sel.appendChild(opt);
-  }
-
-  sel.addEventListener('change', () => {
-    state.tz = sel.value;
-    localStorage.setItem(TZ_STORE_KEY, state.tz);
-    // Re-render the SAME inline week with the new tz
-    const payload = state.weekCache.get(mondayKey);
-    if (payload) renderWeekInline(payload, mondayKey);
-  });
-
-  wrap.append(lab, sel);
-  return wrap;
-}
-
-// Curated default timezone list (used as fallback)
-const DEFAULT_TZS = [
-  'UTC',
-  'Europe/London','Europe/Dublin','Europe/Berlin','Europe/Paris','Europe/Amsterdam','Europe/Madrid',
-  'Europe/Rome','Europe/Zurich','Europe/Stockholm','Europe/Helsinki','Europe/Athens','Europe/Warsaw',
-  'Europe/Bucharest','Europe/Istanbul',
-  'Africa/Johannesburg',
-  'America/New_York','America/Toronto','America/Chicago','America/Denver','America/Los_Angeles',
-  'America/Vancouver','America/Phoenix','America/Mexico_City','America/Sao_Paulo',
-  'Asia/Dubai','Asia/Kolkata','Asia/Singapore','Asia/Hong_Kong','Asia/Shanghai','Asia/Tokyo','Asia/Seoul',
-  'Australia/Perth','Australia/Melbourne','Australia/Sydney','Pacific/Auckland'
-];
-
-// If you declared `let timezones = [...]` earlier, replace it with:
-let timezones = DEFAULT_TZS.slice();
-
-// Turn arrays of strings OR objects into a clean array of IANA IDs
-function normalizeTimezones(input) {
-  if (!input) return DEFAULT_TZS.slice();
-  let arr = Array.isArray(input) ? input.slice() : [];
-  arr = arr
-    .map(z => {
-      if (typeof z === 'string') return z.trim();
-      if (z && typeof z === 'object') {
-        // common field names people use
-        return (z.value || z.id || z.tz || z.zone || '').toString().trim();
+    // Optionally extend until we have enough selectable weeks (cap to +12 months extra)
+    if (minSelectableWeeks > 0){
+      let extra = 0;
+      while (weeks.filter(w => w.selectable).length < minSelectableWeeks && extra < 12){
+        extra += 1;
+        weeks = gen(baseCount + extra);
       }
-      return '';
-    })
-    .filter(Boolean);
-
-  // Dedup + validate (skip anything that throws in DateTimeFormat)
-  const seen = new Set();
-  const out = [];
-  for (const z of arr) {
-    if (seen.has(z)) continue;
-    try {
-      // Will throw if invalid zone
-      new Intl.DateTimeFormat('en-US', { timeZone: z }).format(new Date());
-      seen.add(z);
-      out.push(z);
-    } catch {
-      // skip bad tz
     }
+
+    state.monthWeeks = buildMonthWeeks(weeks);
   }
-  return out.length ? out : DEFAULT_TZS.slice();
-}
-
-// Try to infer "calendar connected" from the meta payload.
-// This is tolerant to different field names you might have on the BE today.
-function detectCalendarAccess(meta) {
-  // Only trust the backend verifier
-  const ca = meta?.calendarAccess;
-  if (!ca) return false;
-  if (ca.ok === true) return true;
-  if (ca.ok === false) return false;
-
-  // Optional: exact status fallback if ok is missing
-  const s = (ca.status || '').toUpperCase();
-  if (s === 'OK') return true;
-  if (s === 'NEEDS_AUTH' || s === 'EXPIRED' || s === 'MISSING_SCOPE' || s === 'NO_ACCESS') return false;
-
-  return false; // unknown -> blocked
-}
-
-function countSelectableWeeksInState() {
-  let n = 0;
-  for (const weeks of state.monthWeeks.values()) {
-    for (const w of weeks) if (w.selectable) n++;
-  }
-  return n;
-}
-
-function materializeQuarter(qKey, opts) {
-  const { y, q } = parseQKey(qKey);
-  const weeks = generateWeeksForQuarter({
-    year: y, quarter: q,
-    initialTz: opts.initialTz || state.meta?.initialTz || state.tz || 'UTC',
-    minNoticeDays: Number(state.meta?.options?.minNoticeDays ?? 0),
-    weekdaysCSV:   String(state.meta?.options?.weekdaysCSV || 'Mon,Tue,Wed,Thu,Fri'),
-    blackoutDatesCSV: String(state.meta?.options?.blackoutDatesCSV || '')
-  });
-  const mw = buildMonthWeeksFromWeekList(weeks);
-  for (const [ym, arr] of mw.entries()) {
-    if (!state.monthWeeks.has(ym)) state.monthWeeks.set(ym, []);
-    const existing = state.monthWeeks.get(ym);
-    const seen = new Set(existing.map(w => w.startISO));
-    arr.forEach(w => { if (!seen.has(w.startISO)) existing.push(w); });
-    existing.sort((a,b)=>a.startISO.localeCompare(b.startISO));
-  }
-}
 
 
-  // Kick things off:
+  // kick off
   init();
 </script>
-
 </body>
 </html>
