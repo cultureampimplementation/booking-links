@@ -5,359 +5,351 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Book your session</title>
   <style>
-    :root{
-      color-scheme: light dark;
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
 
-      /* timeline geometry */
-      --dot-size: 18px;
-      --dot-col: 28px;        /* width of the dot column */
-      --left-gutter: 62px;    /* padding-left on .timeline */
-      --rail-w: 4px;
-      --dot-ring: var(--rail-w);
+      :root{
+          color-scheme: light dark;
 
-      /* vertical rhythm (used to cap the rail) */
-      --tl-pad-y: 12px;       /* .timeline vertical padding */
-      --step-pad-y: 12px;     /* .t-step vertical padding   */
-      --dot-outer: calc(var(--dot-size) + 2 * var(--dot-ring));
+          /* Light Mode Colors */
+          --purple: #7c3aed;
+          --purple-light: #ede9fe;
+          --bg-primary: #f9fafb;
+          --bg-secondary: #ffffff;
+          --text-primary: #1f2937;
+          --text-secondary: #6b7280;
+          --border-color: #e5e7eb;
+          --rail: #d1d5db;
 
-      /* colors */
-      --purple: #7c3aed;
-      --rail: #6b7280;
-      --gray-400: #9ca3af;
+          /* Shadows */
+          --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+          --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 
-      /* month pills */
-      --pill-w: 300px;        /* width of each week pill (adjust as needed) */
-      --week-pill-gap: 12px;  /* vertical space between pills */
-      --agenda-width: 550px;
-    }
+          /* timeline geometry */
+          --dot-size: 18px;
+          --dot-col: 28px;
+          --left-gutter: 62px;
+          --rail-w: 4px;
+          --dot-ring: var(--rail-w);
+          --tl-pad-y: 12px;
+          --step-pad-y: 12px;
+          --dot-outer: calc(var(--dot-size) + 2 * var(--dot-ring));
 
-    html, body { margin:0; padding:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
-    body { padding: 20px; }
+          /* month pills */
+          --pill-w: 300px;
+          --week-pill-gap: 12px;
+          --agenda-width: 550px;
+      }
 
-    /* Header */
-    .h-wrap { margin-bottom: 10px; }
-    .h-eyebrow { font-size: 13px; color: #6b7280; }
-    .h-title { font-weight: 900; font-size: clamp(20px, 3.3vw, 36px); line-height: 1.15; margin-top: 4px; }
+      /* Dark Mode Overrides */
+      @media (prefers-color-scheme: dark) {
+          :root {
+              --purple-light: #4c1d95;
+              --bg-primary: #111827;
+              --bg-secondary: #1f2937;
+              --text-primary: #f9fafb;
+              --text-secondary: #9ca3af;
+              --border-color: #374151;
+              --rail: #4b5563;
+          }
+      }
 
-    /* Notice */
-    .notice { margin-top:10px; color:#4b5563; font-size:14px; }
+      html, body {
+          margin:0;
+          padding:0;
+          font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+          background-color: var(--bg-primary);
+          color: var(--text-primary);
+      }
+      body { padding: 32px; }
 
-    /* Timeline (single row items; rail behind dots) */
-    .timeline{
-      position: relative;
-      padding: var(--tl-pad-y) 14px var(--tl-pad-y) var(--left-gutter);
-      margin-top: 16px;
-    }
-    .timeline::before{
-      content: "";
-      position: absolute;
+      /* Header */
+      .h-wrap { margin-bottom: 10px; }
+      .h-eyebrow { font-size: 13px; color: var(--text-secondary); }
+      .h-title { font-weight: 800; font-size: clamp(20px, 3.3vw, 36px); line-height: 1.15; margin-top: 4px; }
 
-      /* Rail starts/ends at the centers of the first/last dots */
-      top:    calc(var(--tl-pad-y) + var(--step-pad-y) + (var(--dot-outer) / 2));
-      bottom: calc(var(--tl-pad-y) + var(--step-pad-y) + (var(--dot-outer) / 2));
+      /* Notice */
+      .notice { margin-top:10px; color: var(--text-secondary); font-size:14px; }
 
-      /* Rail is exactly through the center of the dot column */
-      left: calc(var(--left-gutter) + (var(--dot-col) / 2) - (var(--rail-w) / 2));
-      width: var(--rail-w);
-      background: var(--rail);
-      border-radius: 4px;
-      z-index: 0; /* behind the dots */
-    }
+      /* Timeline (single row items; rail behind dots) */
+      .timeline{
+          position: relative;
+          padding: var(--tl-pad-y) 14px var(--tl-pad-y) var(--left-gutter);
+          margin-top: 16px;
+      }
+      .timeline::before{
+          content: "";
+          position: absolute;
+          top: calc(var(--tl-pad-y) + var(--step-pad-y) + (var(--dot-outer) / 2));
+          bottom: calc(var(--tl-pad-y) + var(--step-pad-y) + (var(--dot-outer) / 2));
+          left: calc(var(--left-gutter) + (var(--dot-col) / 2) - (var(--rail-w) / 2));
+          width: var(--rail-w);
+          background: var(--rail);
+          border-radius: 4px;
+          z-index: 0;
+      }
 
-    #timeline{ display: grid; gap: 0; }
+      #timeline{ display: grid; gap: 0; }
 
-    .t-step{
-      display: grid;
-      grid-template-columns: var(--dot-col) 1fr;
-      align-items: center;       /* center dot & title in the row */
-      gap: 14px;
-      padding: var(--step-pad-y) 0;
-    }
+      .t-step{
+          display: grid;
+          grid-template-columns: var(--dot-col) 1fr;
+          align-items: center;
+          gap: 14px;
+          padding: var(--step-pad-y) 0;
+      }
 
-    .t-dot{
-      justify-self: center;
-      align-self: center;        /* center the dot vertically */
-      width: var(--dot-size);
-      height: var(--dot-size);
-      border-radius: 999px;
-      border: var(--dot-ring) solid var(--rail);
-      background: #fff;
-      position: relative;
-      z-index: 1;                 /* above the rail */
-    }
+      .t-dot{
+          justify-self: center;
+          align-self: center;
+          width: var(--dot-size);
+          height: var(--dot-size);
+          border-radius: 999px;
+          border: var(--dot-ring) solid var(--rail);
+          background: var(--bg-secondary);
+          position: relative;
+          z-index: 1;
+      }
 
-    /* states */
-    .t-dot.active{
-      background: var(--purple);
-      border-color: var(--rail);
-    }
+      /* states */
+      .t-dot.active{
+          background: var(--purple);
+          border-color: var(--purple);
+          box-shadow: 0 0 0 4px color-mix(in srgb, var(--purple) 20%, transparent);
+      }
 
-    /* solid purple + white check for "done" */
-    .t-dot.done{
-      background: var(--purple);
-      border-color: var(--rail);
-    }
-    .t-dot.done::after{
-      content: "";
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: calc(var(--dot-size) * .55);
-      height: calc(var(--dot-size) * .33);
-      border-left: 3px solid #fff;
-      border-bottom: 3px solid #fff;
-      transform: translate(-50%, -55%) rotate(-45deg);
-      border-radius: 1px;
-    }
+      .t-dot.done{
+          background: var(--purple);
+          border-color: var(--purple);
+      }
+      .t-dot.done::after{
+          content: "";
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: calc(var(--dot-size) * .55);
+          height: calc(var(--dot-size) * .33);
+          border-left: 3px solid #fff;
+          border-bottom: 3px solid #fff;
+          transform: translate(-50%, -55%) rotate(-45deg);
+          border-radius: 1px;
+      }
 
-    /* body = title | ctas on one row; inline content spans full width below */
-    .t-body{
-      display: grid;
-      grid-template-columns: auto auto 1fr; /* title | CTA | spacer */
-      align-items: baseline;                /* align with first line of title */
-      column-gap: 10px;
-      padding: 6px 0;
-    }
-    .t-title{
-      font-weight: 800;
-      font-size: 20px;
-      line-height: 1.2;
-    }
-    .t-cta{
-      justify-self: start;
-      display: inline-flex;
-      gap: 8px;
-      flex-wrap: nowrap;
-    }
+      /* body = title | ctas on one row; inline content spans full width below */
+      .t-body{
+          display: grid;
+          grid-template-columns: auto auto 1fr;
+          align-items: baseline;
+          column-gap: 10px;
+          padding: 6px 0;
+      }
+      .t-title{
+          font-weight: 700;
+          font-size: 20px;
+          line-height: 1.2;
+      }
+      .t-cta{ justify-self: start; display: inline-flex; gap: 8px; flex-wrap: nowrap; }
+      .t-sub{ display:none !important; }
 
-    /* hide subtitles, keep single-row look */
-    .t-sub{ display:none !important; }
+      .t-body .agenda-wrap,
+      .t-body #s3Mount{
+          grid-column: 1 / -1;
+          margin-top: 10px;
+      }
 
-    /* anything inline under a step (agenda, etc) spans the full row below */
-    .t-body .agenda-wrap,
-    .t-body #s3Mount{
-      grid-column: 1 / -1;
-      margin-top: 10px;
-    }
+      .btn {
+          padding: 10px 16px;
+          border: 1px solid transparent;
+          background: var(--purple);
+          color: #fff;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 600;
+          font-family: inherit;
+          transition: all 0.2s ease-in-out;
+      }
+      .btn:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: var(--shadow-md);
+      }
+      .btn.secondary { background:var(--bg-secondary); color:var(--purple); border-color: var(--border-color); }
+      .btn:disabled { opacity:.6; cursor:default; }
+      .link { background:none; border:none; padding:0; color:var(--purple); text-decoration:underline; cursor:pointer; font-family: inherit; }
+      .muted { color: var(--text-secondary); }
 
-    .btn { padding:8px 12px; border:1px solid #c7d2fe; background:#7c3aed; color:#fff; border-radius:8px; cursor:pointer; font-weight:600; }
-    .btn.secondary { background:#fff; color:#7c3aed; }
-    .btn:disabled { opacity:.6; cursor:default; }
-    .link { background:none; border:none; padding:0; color:#7c3aed; text-decoration:underline; cursor:pointer; }
-    .muted { color:#9ca3af; }
+      /* Cards */
+      .card {
+          border:1px solid var(--border-color);
+          border-radius:12px;
+          background: var(--bg-secondary);
+          padding: 20px;
+          box-shadow: var(--shadow-sm);
+      }
 
-    /* Cards */
-    .card { border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:14px; }
+      #landingInline { margin-top: 0; }
+      .ov-grid{
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(calc(var(--pill-w) + 24px), max-content));
+          gap: 14px;
+      }
 
-    /* Inline overview/week */
-    #landingInline { margin-top: 0; }
+      .mcard{
+          border:1px solid var(--border-color);
+          border-radius:12px;
+          background: var(--bg-secondary);
+          padding:12px;
+          width: fit-content;
+          min-width: calc(var(--pill-w) + 24px);
+      }
+      .mhead{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:8px; }
+      .mname{ font-weight:900; font-size:18px; }
 
-    .ov-grid{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(calc(var(--pill-w) + 24px), max-content));
-      gap: 14px;
-    }
+      .mcard .mhead + div{ display:grid; gap: var(--week-pill-gap); }
 
-    .mcard{
-      border:1px solid #e5e7eb;
-      border-radius:12px;
-      background:#fff;
-      padding:12px;
-      width: fit-content;
-      min-width: calc(var(--pill-w) + 24px); /* 12px x-padding on both sides */
-    }
+      .week-pill{
+          background: var(--purple-light);
+          color: var(--text-primary);
+          border:1px solid var(--border-color);
+          border-radius:10px;
+          padding:10px 12px;
+          font-weight:800;
+          font-size:14px;
+          text-align:left;
+          cursor:pointer;
+          display:block;
+          width: var(--pill-w);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+      }
+      .week-pill:hover:not(.disabled) {
+          transform: translateY(-2px);
+          box-shadow: var(--shadow-sm);
+      }
 
-    .mhead{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:8px; }
-    .mname{ font-weight:900; font-size:18px; }
+      .week-pill.disabled{
+          background: color-mix(in srgb, var(--bg-secondary) 50%, var(--bg-primary));
+          color: var(--text-secondary);
+          border-color: var(--border-color);
+          cursor:default;
+      }
 
-    /* container that holds the week pills (the div right after .mhead) */
-    .mcard .mhead + div{
-      display:grid;
-      gap: var(--week-pill-gap);
-    }
+      /* Week grid */
+      .week-wrap{ border:1px solid var(--border-color); border-radius:12px; background: var(--bg-secondary); padding:14px; }
+      .week-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+      .week-title{ font-weight:900; font-size:20px; }
+      .week-list{ display: grid; gap: 10px; }
+      .nav-btn{ padding:6px 10px; border:1px solid var(--border-color); background: var(--bg-secondary); border-radius:8px; cursor:pointer; }
+      .grid{ border:1px solid var(--border-color); border-radius:12px; overflow:hidden; margin-top:10px; }
+      .grid-header{ display:grid; grid-template-columns:repeat(7,1fr); }
+      .grid-header div{ text-align:center; font-size:12px; padding:6px 0; background: var(--bg-primary); border-bottom:1px solid var(--border-color); font-weight:800; }
+      .days{ display:grid; grid-template-columns:repeat(7,1fr); }
+      .day{ border-right:1px solid var(--border-color); border-bottom:1px solid var(--border-color); min-height:120px; padding:6px; }
+      .day:nth-child(7n){ border-right:none; }
+      .date{ font-size:12px; font-weight:700; color: var(--text-primary); }
+      .day.past .date{ color: var(--text-secondary); }
+      .day-body{ display:grid; gap:8px; }
+      .pill{ border:1px solid var(--border-color); background: var(--bg-primary); border-radius:10px; padding:8px 10px; min-height:30px; display:flex; align-items:center; gap:8px; font-weight:600; font-size:13px; justify-content:center; }
+      .pill .icon{ width:1.1em; text-align:center; opacity:.55; }
+      .pill.selected{ background:var(--purple); color:#fff; border-color:var(--purple); }
 
-    /* the lilac week pill – single rule for look + width */
-    .week-pill{
-      /* look */
-      background:#ede9fe;
-      color:#111827;
-      border:1px solid rgba(17,24,39,.1);
-      border-radius:10px;
-      padding:10px 12px;
-      font-weight:800;
-      font-size:14px;
-      text-align:left;
-      box-shadow:inset 0 -1px 0 rgba(255,255,255,.6);
-      cursor:pointer;
+      /* Prep modal */
+      .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; z-index:50; }
+      .modal{ width:min(720px, 92vw); background: var(--bg-secondary); border-radius:12px; box-shadow:var(--shadow-md); overflow:hidden; }
+      .modal header, .modal footer{ padding:12px 16px; border-bottom:1px solid var(--border-color); display:flex; align-items:center; justify-content:space-between; gap:10px; }
+      .modal footer{ border-top:1px solid var(--border-color); border-bottom:none; }
+      .modal h3{ margin:0; font-size:18px; }
+      .modal .content{ padding:14px 16px; max-height:70vh; overflow:auto; }
+      .s2-row{ margin:12px 0; }
+      .s2-title{ font-weight:700; margin-bottom:6px; }
+      .s2-hint{ color: var(--text-secondary); font-size:13px; margin-top:4px; }
+      .s2-input{ width:100%; box-sizing:border-box; }
+      textarea.s2-input{ min-height:70px; resize:vertical; }
+      .save-status{ font-size:12px; color: var(--text-secondary); }
 
-      /* sizing/behavior */
-      display:block;
-      width: var(--pill-w);
-      white-space: nowrap;      /* don’t wrap */
-      overflow: hidden;         /* safety */
-      text-overflow: ellipsis;  /* safety */
-    }
+      /* Agenda (Step 3 inline) */
+      .agenda-wrap{ margin-top:10px; }
+      .agenda-head{ display:flex; align-items:baseline; gap:10px; }
+      .agenda-title{ font-weight:800; }
+      .agenda-list{ display:grid; }
+      .sel-item{ display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border-color); padding:6px 0; }
+      .sel-item:last-child{ border-bottom:none; }
+      .agenda-input-row{ display:flex; gap:8px; margin-top:8px; }
 
-    .week-pill.disabled{
-      background:#f3f4f6;
-      color:#6b7280;
-      border-color:#e5e7eb;
-      cursor:default;
-    }
+      /* Loading modal */
+      #loadingModal{ position:fixed; inset:0; z-index:9999; display:none; align-items:center; justify-content:center; }
+      #loadingModal .modal{ width:min(420px, 92vw); }
+      .loading{ padding:20px; display:flex; flex-direction:column; align-items:center; gap:12px; }
+      .spinner{ width:36px; height:36px; border:3px solid color-mix(in srgb, var(--purple) 30%, transparent); border-top-color:var(--purple); border-radius:50%; animation:spin .9s linear infinite; }
+      @keyframes spin{ to{ transform: rotate(360deg); } }
 
-    /* Week grid (inside a chosen week) */
-    .week-wrap{ border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:14px; }
-    .week-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
-    .week-title{ font-weight:900; font-size:20px; }
-    .week-list{ display: grid; gap: 10px; }
+      .hide{ display:none !important; }
 
-    .nav-btn{ padding:6px 10px; border:1px solid #e5e7eb; background:#fff; border-radius:8px; cursor:pointer; }
-    .grid{ border:1px solid #eee; border-radius:12px; overflow:hidden; margin-top:10px; }
-    .grid-header{ display:grid; grid-template-columns:repeat(7,1fr); }
-    .grid-header div{ text-align:center; font-size:12px; padding:6px 0; background:#fafafa; border-bottom:1px solid #eee; font-weight:800; }
-    .days{ display:grid; grid-template-columns:repeat(7,1fr); }
-    .day{ border-right:1px solid #f2f2f2; border-bottom:1px solid #f2f2f2; min-height:120px; padding:6px; }
-    .day:nth-child(7n){ border-right:none; }
-    .date{ font-size:12px; font-weight:700; color:#374151; }
-    .day.past .date{ color:#9ca3af; }
-    .day-body{ display:grid; gap:8px; }
-    .pill{ border:1px solid #c7d6e6; background:#f7fbff; border-radius:10px; padding:8px 10px; min-height:30px; display:flex; align-items:center; gap:8px; font-weight:600; font-size:13px; justify-content:center; }
-    .pill .icon{ width:1.1em; text-align:center; opacity:.55; }
-    .pill.selected{ background:#0f3b59; color:#fff; border-color:#0f3b59; }
+      /* Inline expansion row */
+      .t-inline{ display: grid; grid-template-columns: 28px 1fr; gap: 14px; padding: 6px 0 12px; }
+      .t-inline .t-spacer{ width: 18px; height: 18px; border-radius: 999px; }
+      .t-inline .t-inline-body{ padding: 4px 0; }
 
-    /* Prep modal */
-    .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; z-index:50; }
-    .modal{ width:min(720px, 92vw); background:#fff; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.2); overflow:hidden; }
-    .modal header, .modal footer{ padding:12px 16px; border-bottom:1px solid #eee; display:flex; align-items:center; justify-content:space-between; gap:10px; }
-    .modal footer{ border-top:1px solid #eee; border-bottom:none; }
-    .modal h3{ margin:0; font-size:18px; }
-    .modal .content{ padding:14px 16px; max-height:70vh; overflow:auto; }
-    .s2-row{ margin:12px 0; }
-    .s2-title{ font-weight:700; margin-bottom:6px; }
-    .s2-hint{ color:#6b7280; font-size:13px; margin-top:4px; }
-    .s2-input{ width:100%; box-sizing:border-box; }
-    textarea.s2-input{ min-height:70px; resize:vertical; }
-    .save-status{ font-size:12px; color:#6b7280; }
+      .timeline.card{ padding: var(--tl-pad-y) 14px var(--tl-pad-y) var(--left-gutter) !important; }
 
-    /* Agenda (Step 3 inline) */
-    .agenda-wrap{ margin-top:10px; }
-    .agenda-head{ display:flex; align-items:baseline; gap:10px; }
-    .agenda-title{ font-weight:800; }
-    .agenda-list{ display:grid; }
-    .sel-item{ display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #eee; padding:6px 0; }
-    .sel-item:last-child{ border-bottom:none; }
-    .agenda-input-row{ display:flex; gap:8px; margin-top:8px; }
+      /* Month pager */
+      .ov-holder{ position:relative; }
+      .ov-bar{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; }
+      .ov-bar > #landingInline{ min-width:0; }
+      .ov-nav{
+          width:32px; height:32px;
+          display:flex; align-items:center; justify-content:center;
+          border:1px solid var(--border-color); background: var(--bg-secondary); border-radius:999px;
+          box-shadow:var(--shadow-sm);
+          cursor:pointer; font-size:18px; line-height:1;
+          transition: transform 0.2s ease-out;
+      }
+      .ov-nav:hover:not(:disabled) { transform: scale(1.1); }
+      .ov-nav:disabled{ opacity:.45; cursor:default; }
+      
+      /* Agenda alignment and sizing */
+      #s3Mount.agenda-wrap{ width: min(100%, var(--agenda-width)); max-width: var(--agenda-width); margin-left: 0; margin-right: auto; }
+      #s3Mount .agenda-list{ display: grid; grid-template-columns: 1fr; justify-items: stretch; width: 100%; }
+      #s3Mount .agenda-input-row{ width: 100%; }
+      #s3Mount .sel-item{ width: 100%; }
+      #s3Mount .agenda-input-row input[type="text"]{ flex: 1 1 400px; width: auto; min-width: 0; }
+      #s3Mount .agenda-input-row .btn{ flex: 0 0 auto; }
+      .t-step.align-top { align-items: flex-start; }
+      .t-step.align-top .t-body { padding-top: 0; }
+      .t-step.align-top .t-dot { align-self: flex-start; }
+      #s3Mount:empty {
+          margin: 0;
+          padding: 0;
+      }
+      /* Ghost button */
+      .btn.ghost{
+          background:transparent;
+          color: var(--purple);
+          border: 1px solid var(--border-color);
+      }
+      .btn.ghost:disabled{ opacity:.6; cursor:default; }
 
-    /* Loading modal */
-    #loadingModal{ position:fixed; inset:0; z-index:9999; display:none; align-items:center; justify-content:center; }
-    #loadingModal .modal{ width:min(420px, 92vw); }
-    .loading{ padding:20px; display:flex; flex-direction:column; align-items:center; gap:12px; }
-    .spinner{ width:36px; height:36px; border:3px solid #cfd8ff; border-top-color:#2a62d6; border-radius:50%; animation:spin .9s linear infinite; }
-    @keyframes spin{ to{ transform: rotate(360deg); } }
+      #s3Mount.agenda-wrap {
+          /* Add the visual frame styles */
+          background-color: var(--purple-light);
+          padding: 16px;
+          border-radius: 12px;
 
-    .hide{ display:none !important; }
+          /* Add vertical spacing from the title above */
+          margin-top: 12px;
 
-    /* Inline expansion row that lives inside the timeline, under Step 1 */
-    .t-inline{
-      display: grid;
-      grid-template-columns: 28px 1fr;   /* spacer | content */
-      gap: 14px;
-      padding: 6px 0 12px;
-    }
-    .t-inline .t-spacer{
-      width: 18px;
-      height: 18px;                      /* keeps rail alignment under dots */
-      border-radius: 999px;
-    }
-    .t-inline .t-inline-body{
-      padding: 4px 0;
-    }
+          /* These existing rules are still good */
+          width: min(100%, var(--agenda-width));
+          max-width: var(--agenda-width);
+          margin-left: 0;
+          margin-right: auto;
+      }
 
-    .timeline.card{
-      padding: var(--tl-pad-y) 14px var(--tl-pad-y) var(--left-gutter) !important;
-    }
-
-    /* (legacy) Month pager holder + next chevron */
-    .ov-holder{ position:relative; }
-    .ov-next{
-      position:absolute;
-      right:-6px;                  /* nudge outside the card area a touch */
-      top:50%;
-      transform:translateY(-50%);
-      width:38px; height:38px;
-      display:flex; align-items:center; justify-content:center;
-      border:1px solid #e5e7eb; background:#fff; border-radius:999px;
-      box-shadow:0 2px 8px rgba(0,0,0,.10);
-      cursor:pointer; font-size:20px; line-height:1;
-    }
-    .ov-next:disabled{ opacity:.45; cursor:default; }
-
-    /* Month pager flanking the inline body (‹ content ›) */
-    .ov-bar{
-      display:grid;
-      grid-template-columns:auto 1fr auto;  /* ‹ | content | › */
-      align-items:center;
-      gap:8px;
-    }
-    .ov-bar > #landingInline{ min-width:0; } /* allow grid content to shrink */
-
-    .ov-nav{
-      width:32px; height:32px;
-      display:flex; align-items:center; justify-content:center;
-      border:1px solid #e5e7eb; background:#fff; border-radius:999px;
-      box-shadow:0 2px 8px rgba(0,0,0,.10);
-      cursor:pointer; font-size:18px; line-height:1;
-    }
-    .ov-nav:disabled{ opacity:.45; cursor:default; }
-    
-    /* Left-align the agenda and give it an explicit width cap that still stretches */
-    #s3Mount.agenda-wrap{
-      width: min(100%, var(--agenda-width));  /* <-- not just max-width */
-      max-width: var(--agenda-width);
-      margin-left: 0;
-      margin-right: auto;
-    }
-
-    /* Make the list fill the container; one full-width column */
-    #s3Mount .agenda-list{
-      display: grid;
-      grid-template-columns: 1fr;   /* full-width track */
-      justify-items: stretch;       /* ensure children stretch */
-      width: 100%;
-    }
-
-    /* Input row should also fill the container */
-    #s3Mount .agenda-input-row{ width: 100%; }
-
-    /* Rows take the full line */
-    #s3Mount .sel-item{ width: 100%; }
-
-    /* Make the text input take the available space; keep the button natural size */
-    #s3Mount .agenda-input-row input[type="text"]{
-      flex: 1 1 400px;   /* grows, with a comfy starting width */
-      width: auto;       /* ignore intrinsic width */
-      min-width: 0;      /* allow shrinking in flex layouts (Safari fix) */
-    }
-
-    #s3Mount .agenda-input-row .btn{
-      flex: 0 0 auto;    /* don't let the button stretch */
-    }
-
-    /* Top-align just the step that has inline content (agenda) */
-    .t-step.align-top { align-items: flex-start; }
-    /* Keep the dot flush with the title line */
-    .t-step.align-top .t-body { padding-top: 0; }
-    .t-step.align-top .t-dot { align-self: flex-start; }
-
-    /* white button, purple text, very thin black outline */
-    .btn.ghost{
-      background:#fff;
-      color: var(--purple);
-      border: 1px solid rgba(0,0,0,.55);
-    }
-    .btn.ghost:disabled{ opacity:.6; cursor:default; }
-
-
+      #s3Mount.agenda-wrap:empty {
+          background-color: transparent;
+          padding: 0;
+          margin-top: 0;
+      }
   </style>
 
 
@@ -652,7 +644,7 @@
       <div class="t-body">
         <div class="t-title">${
           cfg.booked
-            ? S('Meeting on $ev_date ($days days from now)')
+            ? S('Meeting booked for $ev_date ($days days from now)')
             : S('Find a time to meet with $who')
         }</div>
         <div class="t-sub" id="s1Sub">${cfg.booked ? whenLine(cfg.selectedStart) : 'Choose a week to see available times.'}</div>
@@ -736,7 +728,7 @@
       <div class="t-body">
         <div class="t-title">${
           cfg.booked
-            ? S('$ev_date — Confirmed $meetingtype set with $who')
+            ? S('$ev_date: Confirmed $meetingtype set with $who')
             : S('Meet to discuss!')
         }</div>
         <div class="t-sub" id="meetLine">${cfg.booked ? eventLine(cfg.selectedStart) : ''}</div>
@@ -1153,61 +1145,85 @@
    * STEP 2 — PREP QUESTIONS MODAL
    * ===================== */
   function openPrepModal(){
-    const modal = $('#prepModal'); const content = $('#prepContent'); content.innerHTML='';
-    const who = state.meta?.colleagueFirstName || 'your People Scientist';
-    $('#prepTitle').textContent = `Help ${who} prepare`;
+      const modal = $('#prepModal'); const content = $('#prepContent'); content.innerHTML='';
+      const who = state.meta?.colleagueFirstName || 'your People Scientist';
+      $('#prepTitle').textContent = `Help ${who} prepare`;
 
-    let dirty=false; const markDirty=()=>{ dirty=true; $('#prepSaveBtn').disabled=false; updateSaveStamps(true); };
+      let dirty=false; const markDirty=()=>{ dirty=true; $('#prepSaveBtn').disabled=false; updateSaveStamps(true); };
 
-    function getAns(k){ return state.stateJSON?.prep?.answers?.[k]; }
-    function setAns(k,v){ if(!state.stateJSON.prep) state.stateJSON.prep={answers:{}}; if(!state.stateJSON.prep.answers) state.stateJSON.prep.answers={}; state.stateJSON.prep.answers[k]=v; markDirty(); }
+      function getAns(k){ return state.stateJSON?.prep?.answers?.[k]; }
+      function setAns(k,v){ if(!state.stateJSON.prep) state.stateJSON.prep={answers:{}}; if(!state.stateJSON.prep.answers) state.stateJSON.prep.answers={}; state.stateJSON.prep.answers[k]=v; markDirty(); }
 
-    const ctx = { colleagueFirstName: who, customerName: state.meta?.customerName || state.meta?.accountName || '', meetingType: state.meta?.meetingType || '' };
-    const interp = (s)=> String(s||'').replace(/\$\{(\w+)\}/g,(_,k)=> ctx[k] ?? '');
+      const ctx = { colleagueFirstName: who, customerName: state.meta?.customerName || state.meta?.accountName || '', meetingType: state.meta?.meetingType || '' };
+      const interp = (s)=> String(s||'').replace(/\$\{(\w+)\}/g,(_,k)=> ctx[k] ?? '');
 
-    const questions = state.confirmQuestions || [];
-    questions.forEach((q,idx)=>{
-      const key = String(q?.key || ('q'+idx));
-      const typeRaw = (q?.type || q?.questionType || q?.input || (q?.multi? 'multi': 'single')).toString().toLowerCase();
-      const type = (typeRaw==='checkbox' || typeRaw==='checkboxes') ? 'multi' : (typeRaw==='textarea'?'text':typeRaw);
-      const label = interp(q?.label || 'Question');
+      const questions = state.confirmQuestions || [];
+      questions.forEach((q,idx)=>{
+          const key = String(q?.key || ('q'+idx));
+          const typeRaw = (q?.type || q?.questionType || q?.input || (q?.multi? 'multi': 'single')).toString().toLowerCase();
+          const type = (typeRaw==='checkbox' || typeRaw==='checkboxes') ? 'multi' : (typeRaw==='textarea'?'text':typeRaw);
+          const label = interp(q?.label || 'Question');
 
-      const row = document.createElement('div'); row.className='s2-row';
-      const title = document.createElement('div'); title.className='s2-title'; title.textContent = label; row.appendChild(title);
+          const row = document.createElement('div'); row.className='s2-row';
+          const title = document.createElement('div'); title.className='s2-title'; title.textContent = label; row.appendChild(title);
 
-      if(type==='text'){
-        const multiline = !!q?.multiline; const maxLength = Number(q?.maxLength||0) || undefined; const saved = getAns(key) ?? q?.saved ?? '';
-        let input; if(multiline){ input=document.createElement('textarea'); } else { input=document.createElement('input'); input.type='text'; }
-        input.className='s2-input'; input.placeholder = interp(q?.placeholder || ''); if(maxLength) input.maxLength = maxLength; input.value = String(saved||'');
-        input.addEventListener('input', debounce(()=> setAns(key, String(input.value||'').trim()), 200)); row.appendChild(input);
-      } else if(type==='multi'){
-        const opts = parseOptionsLoose(q?.options).map(cleanLabel).map(interp);
-        let saved = getAns(key); if(!Array.isArray(saved)) saved = saved==null ? [] : [String(saved)]; const sel = new Set(saved.map(String));
-        const maxSel = Number(q?.maxSelections || 0) || Infinity;
-        opts.forEach(opt=>{
-          const id = `pm_${key}_${opt.replace(/\W+/g,'_')}`; const wrap=document.createElement('div'); wrap.style.display='flex'; wrap.style.alignItems='center'; wrap.style.gap='8px'; wrap.style.margin='6px 0';
-          const cb=document.createElement('input'); cb.type='checkbox'; cb.id=id; cb.checked=sel.has(opt);
-          cb.onchange=()=>{ const cur=new Set(getAns(key)||[]); if(cb.checked){ if(cur.size>=maxSel){ cb.checked=false; alert(`You can select up to ${maxSel}.`); return; } cur.add(opt); } else { cur.delete(opt); } setAns(key, Array.from(cur)); };
-          const lab=document.createElement('label'); lab.setAttribute('for', id); lab.textContent=opt; wrap.append(cb,lab); row.appendChild(wrap);
-        });
-      } else {
-        const opts = parseOptionsLoose(q?.options).map(cleanLabel).map(interp); const saved = getAns(key) ?? (q?.saved!=null ? cleanLabel(q.saved): null);
-        opts.forEach(opt=>{ const id=`pm_${key}_${opt.replace(/\W+/g,'_')}`; const wrap=document.createElement('div'); wrap.style.display='flex'; wrap.style.alignItems='center'; wrap.style.gap='8px'; wrap.style.margin='6px 0';
-          const rb=document.createElement('input'); rb.type='radio'; rb.name=`pm_${key}`; rb.id=id; rb.value=opt; if(saved && String(saved)===opt) rb.checked=true; rb.onchange=()=> setAns(key, opt);
-          const lab=document.createElement('label'); lab.setAttribute('for', id); lab.textContent=opt; wrap.append(rb,lab); row.appendChild(wrap); });
-      }
+          if(type==='text'){
+              const multiline = !!q?.multiline; const maxLength = Number(q?.maxLength||0) || undefined; const saved = getAns(key) ?? q?.saved ?? '';
+              let input; if(multiline){ input=document.createElement('textarea'); } else { input=document.createElement('input'); input.type='text'; }
+              input.className='s2-input'; input.placeholder = interp(q?.placeholder || ''); if(maxLength) input.maxLength = maxLength; input.value = String(saved||'');
+              input.addEventListener('input', debounce(()=> setAns(key, String(input.value||'').trim()), 200)); row.appendChild(input);
+          } else if(type==='multi'){
+              const opts = parseOptionsLoose(q?.options).map(cleanLabel).map(interp);
+              let saved = getAns(key); if(!Array.isArray(saved)) saved = saved==null ? [] : [String(saved)]; const sel = new Set(saved.map(String));
+              const maxSel = Number(q?.maxSelections || 0) || Infinity;
+              opts.forEach(opt=>{
+                  const id = `pm_${key}_${opt.replace(/\W+/g,'_')}`; const wrap=document.createElement('div'); wrap.style.display='flex'; wrap.style.alignItems='center'; wrap.style.gap='8px'; wrap.style.margin='6px 0';
+                  const cb=document.createElement('input'); cb.type='checkbox'; cb.id=id; cb.checked=sel.has(opt);
+                  cb.onchange=()=>{ const cur=new Set(getAns(key)||[]); if(cb.checked){ if(cur.size>=maxSel){ cb.checked=false; alert(`You can select up to ${maxSel}.`); return; } cur.add(opt); } else { cur.delete(opt); } setAns(key, Array.from(cur)); };
+                  const lab=document.createElement('label'); lab.setAttribute('for', id); lab.textContent=opt; wrap.append(cb,lab); row.appendChild(wrap);
+              });
+          } else {
+              const opts = parseOptionsLoose(q?.options).map(cleanLabel).map(interp); const saved = getAns(key) ?? (q?.saved!=null ? cleanLabel(q.saved): null);
+              opts.forEach(opt=>{ const id=`pm_${key}_${opt.replace(/\W+/g,'_')}`; const wrap=document.createElement('div'); wrap.style.display='flex'; wrap.style.alignItems='center'; wrap.style.gap='8px'; wrap.style.margin='6px 0';
+                  const rb=document.createElement('input'); rb.type='radio'; rb.name=`pm_${key}`; rb.id=id; rb.value=opt; if(saved && String(saved)===opt) rb.checked=true; rb.onchange=()=> setAns(key, opt);
+                  const lab=document.createElement('label'); lab.setAttribute('for', id); lab.textContent=opt; wrap.append(rb,lab); row.appendChild(wrap); });
+          }
+          content.appendChild(row);
+      });
 
-      content.appendChild(row);
-    });
+      function updateSaveStamps(showUnsaved){ const iso = state.stateJSON?.lastEditedAtISO; const stamp = showUnsaved? 'Unsaved changes' : (iso? fmtSaved(iso): 'Not saved yet'); $('#prepSaveTop').textContent = stamp; $('#prepSaveBottom').textContent = stamp; }
+      function fmtSaved(iso){ const d = new Date(iso); if(isNaN(+d)) return 'Not saved yet'; const date = new Intl.DateTimeFormat('en-US', { timeZone: state.tz, month:'short', day:'2-digit', year:'numeric' }).format(d); const time = fmtTime(d, state.tz); return `Last saved on ${date} at ${time}`; }
 
-    function updateSaveStamps(showUnsaved){ const iso = state.stateJSON?.lastEditedAtISO; const stamp = showUnsaved? 'Unsaved changes' : (iso? fmtSaved(iso): 'Not saved yet'); $('#prepSaveTop').textContent = stamp; $('#prepSaveBottom').textContent = stamp; }
-    function fmtSaved(iso){ const d = new Date(iso); if(isNaN(+d)) return 'Not saved yet'; const date = new Intl.DateTimeFormat('en-US', { timeZone: state.tz, month:'short', day:'2-digit', year:'numeric' }).format(d); const time = fmtTime(d, state.tz); return `Last saved on ${date} at ${time}`; }
+      const saveBtn = $('#prepSaveBtn');
+      saveBtn.textContent = 'Save and Close'; // Change button text
 
-    $('#prepSaveBtn').onclick = async ()=>{ try{ $('#prepSaveBtn').textContent='Saving…'; $('#prepSaveBtn').disabled=true; state.stateJSON.lastEditedAtISO = new Date().toISOString(); await apiPost('saveStateJSON', { token }, { stateJSON: state.stateJSON }); dirty=false; updateSaveStamps(false); renderTimeline(); } catch(e){ alert('Could not save right now.'); } finally { $('#prepSaveBtn').textContent='Save'; $('#prepSaveBtn').disabled=false; } };
-    $('#prepCloseBtn').onclick = ()=>{ modal.style.display='none'; };
+      saveBtn.onclick = async () => {
+          saveBtn.textContent = 'Saving…';
+          saveBtn.disabled = true;
+          try {
+              // 1. Perform the save
+              state.stateJSON.lastEditedAtISO = new Date().toISOString();
+              await apiPost('saveStateJSON', { token }, { stateJSON: state.stateJSON });
+              
+              // 2. On success, update UI and close modal
+              dirty = false;
+              updateSaveStamps(false);
+              renderTimeline();
+              modal.style.display = 'none'; // Close the modal
 
-    updateSaveStamps(false); $('#prepSaveBtn').disabled=true; // will enable on edit
-    modal.style.display='flex';
+          } catch (e) {
+              // 3. On failure, show an error and reset the button
+              alert('Could not save right now. Please try again.');
+              saveBtn.textContent = 'Save and Close'; // Reset text on failure
+              saveBtn.disabled = false; // Re-enable for another try
+          }
+      };
+
+      $('#prepCloseBtn').onclick = ()=>{ modal.style.display='none'; };
+
+      updateSaveStamps(false);
+      $('#prepSaveBtn').disabled = true; // will enable on edit
+      modal.style.display='flex';
   }
 
   function parseOptionsLoose(raw){
@@ -1224,12 +1240,12 @@
     const mount = $('#s3Mount'); if(!mount) return; mount.innerHTML='';
 
     const head=document.createElement('div'); head.className='agenda-head';
-    const title=document.createElement('div'); title.className='agenda-title'; title.textContent='Agenda:'; head.appendChild(title);
+    const title=document.createElement('div'); title.className='agenda-title'; title.textContent='Discussion points:'; head.appendChild(title);
     const stamp=document.createElement('div'); stamp.className='save-status'; stamp.style.marginLeft='auto'; stamp.id='agendaStamp'; head.appendChild(stamp);
 
     const list=document.createElement('div'); list.className='agenda-list'; list.id='agendaList';
     const addRow=document.createElement('div'); addRow.className='agenda-input-row';
-    const input=document.createElement('input'); input.type='text'; input.placeholder='Add an agenda item…';
+    const input=document.createElement('input'); input.type='text'; input.placeholder='Add a question or agenda item…';
     const addBtn=document.createElement('button'); addBtn.className='btn secondary'; addBtn.textContent='Add';
     addRow.append(input, addBtn);
 
