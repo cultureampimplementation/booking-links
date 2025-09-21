@@ -979,7 +979,7 @@
     const wrap = document.createElement('div'); wrap.className='week-wrap';
 
     const head = document.createElement('div'); head.className='week-head';
-    const back = document.createElement('button'); back.className='nav-btn'; back.textContent='← Back to weeks'; back.onclick = showInlineOverview;
+    const back = document.createElement('button'); back.className='nav-btn'; back.textContent='← Back to week view'; back.onclick = showInlineOverview;
     const title = document.createElement('div'); title.className='week-title'; const d=new Date(monKey+'T00:00:00Z'); title.textContent = `${d.toLocaleString('en-GB',{month:'long',year:'numeric'})} • Week ${isoWeekNumberFromKey(monKey)}`;
     const nav = document.createElement('div'); nav.style.display='flex'; nav.style.gap='8px';
     const prev=document.createElement('button'); prev.className='nav-btn'; prev.textContent='←'; prev.onclick=()=>openWeekInline(plusDaysKey(monKey,-7));
@@ -1068,7 +1068,7 @@
     $('#confirmWhen').textContent = when;
 
     const cp = $('#confirmPrep'); cp.style.display='none'; cp.textContent='';
-    if(slot.prep && slot.prep.start){ cp.style.display=''; cp.textContent = `${(state.meta?.colleagueFirstName||'They')} would begin preparing on ${fmtDate(slot.prep.start,state.tz)} at ${fmtTime(slot.prep.start,state.tz)}.`; }
+    if(slot.prep && slot.prep.start){ cp.style.display=''; cp.textContent = `${(state.meta?.colleagueFirstName||'They')} would hold a slot to prepare for the call at ${fmtTime(slot.prep.start,state.tz)} on ${fmtDate(slot.prep.start,state.tz)}`; }
 
     // simple invitees list (preselected only)
     const inviteList = $('#inviteList'); inviteList.innerHTML='';
