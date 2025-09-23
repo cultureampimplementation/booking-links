@@ -434,6 +434,13 @@
     monthPager: { offset: 0, visible: 3 },
   };
 
+  // Progressive granularity passes (coarse → fine)
+  const WEEK_PASSES = [
+    { g: 60, msg: 'Scanning for availability…' },
+    { g: 30, msg: 'Looking for prep slots…' },
+    { g: 15, msg: 'Taking a closer look…' },
+  ];
+
   /* =====================
    * UTILITIES
    * ===================== */
@@ -924,30 +931,56 @@
   async function loadWeekCoarseToFine(monKey, { minSlots = 3, prefetch = false } = {}){
     if (!prefetch) showLoading('Scanning for availability…');
 
-    const passes = [
-      { g: 60, msg: 'Scanning for availability…' },
-      { g: 30, msg: 'Looking for prep slots…' },
-      { g: 15, msg: 'Taking a closer look…' },
-    ];
-
     const batches = [];
-    for (let i = 0; i < passes.length; i++){
-      const { g, msg } = passes[i];
+    let tried = 0;
+
+    for (let i = 0; i < WEEK_PASSES.length; i++){
+      const { g, msg } = WEEK_PASSES[i];
       const batch = await fetchWeekAtGranularity(monKey, g);
       batches.push(batch);
+      tried = i + 1;
 
       const merged = mergeSlotsUnique(batches);
-      if (!prefetch && merged.length < minSlots && i < passes.length-1) showLoading(msg);
+      const hasMore = tried < WEEK_PASSES.length;
+
+      // cache progressive state after each pass
+      const payload = { slotsParsed: merged, exactCount: merged.length, tried, hasMore };
+      state.weekCache.set(monKey, payload);
+
+      if (!prefetch && merged.length < minSlots && hasMore) showLoading(msg);
       if (merged.length >= minSlots){
-        const payload = { slotsParsed: merged, exactCount: merged.length };
-        state.weekCache.set(monKey, payload);
         return payload;
       }
     }
 
+    // Finished all passes
     const merged = mergeSlotsUnique(batches);
-    const payload = { slotsParsed: merged, exactCount: merged.length };
+    const payload = { slotsParsed: merged, exactCount: merged.length, tried, hasMore: false };
     state.weekCache.set(monKey, payload);
+    return payload;
+  }
+
+  async function loadWeekNextGranularity(monKey){
+    const cached = state.weekCache.get(monKey);
+    const already = Number(cached?.tried || 0);
+    if (already >= WEEK_PASSES.length) return cached; // nothing more to do
+
+    const { g, msg } = WEEK_PASSES[already];
+    showLoading(msg);
+
+    // fetch just the next pass
+    const nextBatch = await fetchWeekAtGranularity(monKey, g);
+
+    // merge with what we have
+    const current = Array.isArray(cached?.slotsParsed) ? cached.slotsParsed : [];
+    const merged = mergeSlotsUnique([current, nextBatch]);
+
+    const tried = already + 1;
+    const hasMore = tried < WEEK_PASSES.length;
+    const payload = { slotsParsed: merged, exactCount: merged.length, tried, hasMore };
+
+    state.weekCache.set(monKey, payload);
+    hideLoading();
     return payload;
   }
 
@@ -1013,9 +1046,42 @@
 
     grid.appendChild(daysEl); wrap.appendChild(grid);
 
-    const meta=document.createElement('div'); meta.className='notice'; meta.textContent=`Found ${payload.exactCount||0} slot${(payload.exactCount||0)===1?'':'s'}.`; wrap.appendChild(meta);
+    const meta = document.createElement('div');
+    meta.className = 'notice';
 
-    if((payload.exactCount||0)===0){ const banner=document.createElement('div'); banner.className='card'; banner.style.background='#f9fafb'; banner.style.textAlign='center'; banner.textContent='No weeks available'; wrap.appendChild(banner); }
+    const count = Number(payload.exactCount || 0);
+    const plural = count === 1 ? '' : 's';
+    meta.textContent = `Found ${count} slot${plural}. `;
+
+    // Add "Look for more" if we still have finer passes to try
+    if (payload.hasMore) {
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'link';         // uses your existing link style
+      more.textContent = 'Look for more';
+      more.style.marginLeft = '6px';
+      more.onclick = async () => {
+        more.disabled = true;
+        try {
+          const updated = await loadWeekNextGranularity(monKey);
+          renderWeekInline(updated, monKey);   // re-render with new merged set
+        } finally {
+          more.disabled = false;
+        }
+      };
+      meta.appendChild(more);
+    }
+
+    wrap.appendChild(meta);
+
+    if (count === 0){
+      const banner = document.createElement('div');
+      banner.className = 'card';
+      banner.style.background = '#f9fafb';
+      banner.style.textAlign = 'center';
+      banner.textContent = 'No weeks available';
+      wrap.appendChild(banner);
+    }
 
     mount.appendChild(wrap);
   }
