@@ -520,7 +520,9 @@
 
   // Build the token context for titles
   function buildTemplateCtx(cfg){
-    const who = state.meta?.colleagueFirstName || state.meta?.colleagueEmail || 'your contact';
+    const SENTINEL_EMAIL = 'preexistingmeeting@acme.com';
+    const rawWho = state.meta?.colleagueFirstName || state.meta?.colleagueEmail || 'your contact';
+    const who = (state.isPreBooked || String(state.meta?.colleagueEmail || '').toLowerCase() === SENTINEL_EMAIL) ? '' : rawWho;
     const mt  = state.meta?.meetingType || 'session';
     const tz  = state.tz;
 
@@ -553,12 +555,14 @@
     if (ca.ok === true)  return true;
     if (ca.ok === false) return false;
 
-    const s = (ca.status || '').toUpperCase();
-    if (s === 'OK') return true;
-    if (['NEEDS_AUTH','EXPIRED','MISSING_SCOPE','NO_ACCESS'].includes(s)) return false;
+    const s = String(ca.status || '').toUpperCase();
+    // Add MISSING_EMAIL here
+    if (['OK'].includes(s)) return true;
+    if (['NEEDS_AUTH','EXPIRED','MISSING_SCOPE','NO_ACCESS','MISSING_EMAIL','ERROR','UNKNOWN'].includes(s)) return false;
 
-    return false; // unknown -> treat as not bookable
+    return false; // default-conservative
   }
+
 
   /* =====================
    * META / INIT
@@ -570,6 +574,13 @@
       const meta = await apiGet('getInviteMeta', { token });
       state.meta = meta; // keep raw for now
       state.calendarAccessOk = detectCalendarAccess(meta);
+
+      const SENTINEL_EMAIL = 'preexistingmeeting@acme.com';
+      const isSentinel = String(meta.colleagueEmail || '').toLowerCase() === SENTINEL_EMAIL;
+
+      state.isPreBooked = isSentinel
+        || !!meta.bookedStartISO
+        || String(meta.status || '').toUpperCase() === 'USED';
 
       // parse stateJSON
       let sj = meta.stateJSON; if(typeof sj==='string'){ try{ sj=JSON.parse(sj);}catch{ sj=null; } }
@@ -587,9 +598,16 @@
       const customer = meta.customerName || meta.accountName || '';
       const who = meta.colleagueFirstName || meta.colleagueEmail || '';
       const mt = meta.meetingType || 'Design session';
+
       $('#eyebrow').textContent = `${customer ? customer+' & ' : ''}Culture Amp`;
-      $('#title').innerHTML = `${mt} with <span>${who}</span>`;
-      $('#smallNotice').textContent = `Pick a week and we’ll search ${who || 'your contact'}’s calendar — including time for preparation when required.`;
+
+      if (!state.isPreBooked && who && String(who).toLowerCase() !== 'preexistingmeeting@acme.com') {
+        $('#title').innerHTML = `${mt} with <span>${who}</span>`;
+        $('#smallNotice').textContent = `Pick a week and we’ll search ${who}'s calendar — including time for preparation when required.`;
+      } else {
+        $('#title').textContent = mt;
+        $('#smallNotice').textContent = 'This session is already scheduled. You can review prep questions and co-create the agenda below.';
+      }
 
       // weeks: locally generate the current quarter (past disabled)
       materializeInitialMonths();
@@ -639,6 +657,7 @@
   function renderTimeline(){
     const t = $('#timeline'); if(!t) return; t.innerHTML = '';
     const cfg = derive();
+    const isPreBooked = !!state.isPreBooked;
     const tpl = buildTemplateCtx(cfg);
     const S = (s, extra) => fill(s, { ...tpl, ...(extra||{}) });
 
@@ -682,11 +701,14 @@
       const dotClass = cfg.booked && cfg.allAnswered ? 'done' : (cfg.booked ? 'active' : '');
       step2.innerHTML = `<div class="t-dot ${dotClass}"></div>
         <div class="t-body">
-          <div class="t-title">${
-            cfg.booked
-              ? S('Provide some extra input before $prep_date to help $who prepare')
-              : S('Provide some extra input to help $who prepare')
-          }</div>
+        <div class="t-title">${
+          cfg.booked
+            ? (isPreBooked
+                ? S('Provide some extra input before $prep_date to help us prepare')
+                : S('Provide some extra input before $prep_date to help $who prepare'))
+            : S('Provide some extra input to help $who prepare')
+        }</div>
+
           <div class="t-sub" id="s2Sub">${cfg.booked ? (cfg.allAnswered?'You can review your answers.':'Share input so we can prepare.') : 'Available after you book.'}</div>
           <div class="t-cta" id="s2Cta"></div>
         </div>`;
@@ -712,7 +734,9 @@
       step4.className = 't-step';
 
       const title = cfg.booked
-        ? S(`$prep_date: We've held time in $who's calendar to prepare`)
+        ? (isPreBooked
+            ? S(`$prep_date: We’ve held time to prepare`)
+            : S(`$prep_date: We've held time in $who's calendar to prepare`))
         : 'We’ll hold time to prepare';
 
       // dot: empty until prep start time, then done
@@ -733,11 +757,13 @@
     const step5 = document.createElement('div'); step5.className='t-step';
     step5.innerHTML = `<div class="t-dot"></div>
       <div class="t-body">
-        <div class="t-title">${
-          cfg.booked
-            ? S('$ev_date: Confirmed $meetingtype set with $who')
-            : S('Meet to discuss!')
-        }</div>
+      <div class="t-title">${
+        cfg.booked
+          ? (isPreBooked
+              ? S('$ev_date: Confirmed $meetingtype')
+              : S('$ev_date: Confirmed $meetingtype set with $who'))
+          : S('Meet to discuss!')
+      }</div>
         <div class="t-sub" id="meetLine">${cfg.booked ? eventLine(cfg.selectedStart) : ''}</div>
       </div>`;
     steps.push(step5);
